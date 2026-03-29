@@ -1,4 +1,4 @@
-﻿import { Injectable, MessageEvent } from '@nestjs/common';
+﻿import { ForbiddenException, Injectable, MessageEvent } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import OpenAI from 'openai';
@@ -9,6 +9,7 @@ import { LeadEntity, LeadStatus } from '../leads/entities/lead.entity';
 import { KAFKA_MULTIMARCAS_SHOP_ID } from '../inventory-sync/inventory-sync.constants';
 import { ShopEntity } from '../shops/entities/shop.entity';
 import { TestDriveEntity, TestDriveStatus } from '../test-drives/entities/test-drive.entity';
+import { JwtUser } from '../auth/jwt-user.interface';
 import { UserEntity } from '../users/entities/user.entity';
 import { VehicleEntity } from '../vehicles/entities/vehicle.entity';
 import { SendChatMessageDto } from './dto/send-chat-message.dto';
@@ -103,15 +104,22 @@ export class ChatService {
     return reply;
   }
 
-  async reset(sessionId: string) {
+  async reset(sessionId: string, user: JwtUser) {
     const session = await this.chatSessionsRepository.findOne({ where: { sessionKey: sessionId } });
-    if (session) await this.chatSessionsRepository.remove(session);
+    if (session) {
+      this.ensureSessionAccess(session, user);
+      await this.chatSessionsRepository.remove(session);
+    }
     this.publishStream(sessionId, 'reset', { success: true });
     return { success: true };
   }
 
-  async sessionsList() {
-    const sessions = await this.chatSessionsRepository.find({ order: { updatedAt: 'DESC' }, take: 100 });
+  async sessionsList(user: JwtUser) {
+    const sessions = await this.chatSessionsRepository.find({
+      where: this.buildShopScope(user),
+      order: { updatedAt: 'DESC' },
+      take: 100,
+    });
     return sessions.map((session) => ({
       sessionId: session.sessionKey,
       totalMessages: session.messagesCount,
@@ -125,9 +133,10 @@ export class ChatService {
     }));
   }
 
-  async messages(sessionId: string) {
+  async messages(sessionId: string, user: JwtUser) {
     const session = await this.chatSessionsRepository.findOne({ where: { sessionKey: sessionId } });
     if (!session) return [];
+    this.ensureSessionAccess(session, user);
     const messages = await this.chatMessagesRepository.find({ where: { sessionId: session.id }, order: { createdAt: 'ASC' } });
     return messages.map((message) => ({
       id: message.id,
@@ -138,15 +147,17 @@ export class ChatService {
     }));
   }
 
-  async keywords() {
-    const rows = await this.chatSessionsRepository
+  async keywords(user: JwtUser) {
+    const query = this.chatSessionsRepository
       .createQueryBuilder('session')
       .select('unnest(session.keywords)', 'keyword')
-      .addSelect('COUNT(*)::int', 'count')
-      .groupBy('keyword')
-      .orderBy('count', 'DESC')
-      .limit(10)
-      .getRawMany<{ keyword: string; count: string }>();
+      .addSelect('COUNT(*)::int', 'count');
+
+    if (user.shopId) {
+      query.where('session.shopId = :shopId', { shopId: user.shopId });
+    }
+
+    const rows = await query.groupBy('keyword').orderBy('count', 'DESC').limit(10).getRawMany<{ keyword: string; count: string }>();
     return rows.map((row) => ({ keyword: row.keyword, count: Number(row.count) }));
   }
 
@@ -164,20 +175,26 @@ export class ChatService {
     };
   }
 
-  async metrics() {
+  async metrics(user: JwtUser) {
     const memory = process.memoryUsage();
-    const sessions = await this.chatSessionsRepository.count();
-    const messages = await this.chatMessagesRepository.count();
-    const events = await this.chatTelemetryRepository.count();
-    const handoffs = await this.chatSessionsRepository
-      .createQueryBuilder('session')
-      .select('COALESCE(SUM(session.handoffsCount), 0)', 'value')
-      .getRawOne<{ value: string }>();
+    const scopedSessions = await this.chatSessionsRepository.find({
+      where: this.buildShopScope(user),
+      select: { id: true, handoffsCount: true },
+    });
+    const sessionIds = scopedSessions.map((session) => session.id);
+    const sessions = scopedSessions.length;
+    const messages = sessionIds.length
+      ? await this.chatMessagesRepository.createQueryBuilder('message').where('message.sessionId IN (:...sessionIds)', { sessionIds }).getCount()
+      : 0;
+    const events = sessionIds.length
+      ? await this.chatTelemetryRepository.createQueryBuilder('event').where('event.sessionId IN (:...sessionIds)', { sessionIds }).getCount()
+      : 0;
+    const handoffs = scopedSessions.reduce((sum, session) => sum + (session.handoffsCount ?? 0), 0);
 
     return {
       status: 'ok',
       timestamp: new Date().toISOString(),
-      chat: { sessions, messages, telemetryEvents: events, handoffs: Number(handoffs?.value ?? 0) },
+      chat: { sessions, messages, telemetryEvents: events, handoffs },
       ai: { enabled: this.aiEnabled, model: this.aiEnabled ? this.aiModel : null },
       system: {
         uptime: Math.round(process.uptime()),
@@ -192,30 +209,43 @@ export class ChatService {
     };
   }
 
-  async observability() {
-    const [sessions, messages, telemetryEvents, leads, testDrives] = await Promise.all([
-      this.chatSessionsRepository.count(),
-      this.chatMessagesRepository.count(),
-      this.chatTelemetryRepository.count(),
-      this.leadsRepository.count(),
-      this.testDrivesRepository.count(),
+  async observability(user: JwtUser) {
+    const scopedSessions = await this.chatSessionsRepository.find({ where: this.buildShopScope(user), select: { id: true } });
+    const sessionIds = scopedSessions.map((session) => session.id);
+    const [messages, telemetryEvents, leads, testDrives] = await Promise.all([
+      sessionIds.length
+        ? this.chatMessagesRepository.createQueryBuilder('message').where('message.sessionId IN (:...sessionIds)', { sessionIds }).getCount()
+        : 0,
+      sessionIds.length
+        ? this.chatTelemetryRepository.createQueryBuilder('event').where('event.sessionId IN (:...sessionIds)', { sessionIds }).getCount()
+        : 0,
+      this.leadsRepository.count({ where: this.buildShopScope(user) }),
+      this.testDrivesRepository.count({ where: this.buildShopScope(user) }),
     ]);
-    const toolRows = await this.chatTelemetryRepository
+    const toolQuery = this.chatTelemetryRepository
       .createQueryBuilder('event')
       .select("event.payload->>'toolName'", 'tool')
       .addSelect('COUNT(*)::int', 'count')
-      .where("event.type = 'tool.called'")
-      .groupBy('tool')
-      .orderBy('count', 'DESC')
-      .limit(10)
-      .getRawMany<{ tool: string | null; count: string }>();
+      .where("event.type = 'tool.called'");
 
-    const recentEvents = await this.chatTelemetryRepository.find({ order: { createdAt: 'DESC' }, take: 20 });
+    if (sessionIds.length) toolQuery.andWhere('event.sessionId IN (:...sessionIds)', { sessionIds });
+    else toolQuery.andWhere('1 = 0');
+
+    const toolRows = await toolQuery.groupBy('tool').orderBy('count', 'DESC').limit(10).getRawMany<{ tool: string | null; count: string }>();
+
+    const recentEvents = sessionIds.length
+      ? await this.chatTelemetryRepository
+          .createQueryBuilder('event')
+          .where('event.sessionId IN (:...sessionIds)', { sessionIds })
+          .orderBy('event.createdAt', 'DESC')
+          .limit(20)
+          .getMany()
+      : [];
 
     return {
       status: 'ok',
       timestamp: new Date().toISOString(),
-      overview: { sessions, messages, telemetryEvents, leads, testDrives },
+      overview: { sessions: scopedSessions.length, messages, telemetryEvents, leads, testDrives },
       tools: toolRows.filter((row) => !!row.tool).map((row) => ({ name: row.tool as string, count: Number(row.count) })),
       recentEvents: recentEvents.map((event) => ({
         id: event.id,
@@ -459,15 +489,6 @@ export class ChatService {
     }
 
     if (contextVehicle && !session.shopId) session.shopId = contextVehicle.shopId;
-
-    if (!session.shopId) {
-      const defaultShop = await this.shopsRepository.findOne({ where: { id: KAFKA_MULTIMARCAS_SHOP_ID } });
-      if (defaultShop) session.shopId = defaultShop.id;
-      else {
-        const fallbackShop = await this.shopsRepository.findOne({ where: { isActive: true }, order: { createdAt: 'ASC' } });
-        session.shopId = fallbackShop?.id ?? null;
-      }
-    }
 
     if (!session.shopId && dto.shopId) session.shopId = dto.shopId;
     return { contextVehicle, seller: session.shopId ? await this.pickSeller(session.shopId) : null };
@@ -902,6 +923,17 @@ export class ChatService {
     this.getStreamChannel(sessionId).next({ type, data: (typeof data === 'string' || (typeof data === 'object' && data !== null)) ? data : String(data) });
   }
 
+  private buildShopScope(user: JwtUser): { shopId?: string } {
+    return user.shopId ? { shopId: user.shopId } : {};
+  }
+
+  private ensureSessionAccess(session: ChatSessionEntity, user: JwtUser) {
+    if (!user.shopId) return;
+    if (session.shopId !== user.shopId) {
+      throw new ForbiddenException('Sessao fora do escopo da loja do usuario.');
+    }
+  }
+
   private async logTelemetry(sessionId: string, type: string, message: string, payload?: Record<string, unknown>, level: 'info' | 'warning' | 'error' = 'info') {
     await this.chatTelemetryRepository.save(this.chatTelemetryRepository.create({ sessionId, type, level, message, payload: payload ?? null }));
   }
@@ -1011,5 +1043,6 @@ export class ChatService {
   private toKeyword(value: string) { return value.trim(); }
   private toTitleCase(value: string) { return value.toLowerCase().split(/\s+/).map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' '); }
 }
+
 
 

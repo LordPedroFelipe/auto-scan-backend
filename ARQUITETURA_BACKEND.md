@@ -1,8 +1,8 @@
-# Arquitetura do Backend
+ï»¿# Arquitetura do Backend
 
 ## Objetivo
 
-Descrever a arquitetura atual do backend do Auto Scan, os modulos existentes, o papel de cada camada e o estado da reconstrucao.
+Descrever a arquitetura atual do backend do Auto Scan, os modulos existentes, o papel de cada camada e o estado atual da implementacao.
 
 ## Stack
 
@@ -13,10 +13,11 @@ Descrever a arquitetura atual do backend do Auto Scan, os modulos existentes, o 
 - class-validator
 - @nestjs/schedule
 - OpenAI SDK
+- Docker Compose
 
 ## Principios adotados
 
-- reconstruir com foco no produto, nao no backend .NET perdido
+- reconstruir com foco no produto
 - preservar contratos do frontend quando fizer sentido
 - organizar por modulo de dominio
 - priorizar execucao real e validacao continua
@@ -50,6 +51,9 @@ backend/
       run-migrations.ts
       seed.ts
       sync-inventory.ts
+      wait-for-db.ts
+  Dockerfile
+  docker-compose.yml
 ```
 
 ## Modulos do dominio
@@ -94,7 +98,7 @@ Responsavel por:
 
 - CRUD de veiculos
 - filtros e paginacao
-- integrações externas de estoque
+- integracao com estoque externo
 - inativacao logica de itens importados
 
 ### Leads
@@ -147,18 +151,21 @@ Responsavel por:
 
 - sincronizacao automatica de estoque por loja
 - cron por loja
-- status de ultima integracao
+- status da ultima integracao
 - provisionamento inicial da Kafka Multimarcas
 
 ### Chat
 
 Responsavel por:
 
-- sessao conversacional
+- sessao conversacional persistida
+- streaming SSE
 - extracao de perfil do cliente
-- recomendacao de veiculos
+- recomendacao de veiculos com scoring comercial
 - criacao automatica de lead
 - handoff para vendedor
+- simulacao inicial de financiamento
+- telemetria e observabilidade
 - integracao opcional com OpenAI
 
 ## Camadas internas por modulo
@@ -174,12 +181,12 @@ Cada modulo tende a seguir esta organizacao:
 
 ### Estrategia atual
 
-Hoje convivem duas abordagens:
+Hoje coexistem duas abordagens:
 
-- `synchronize: true` no bootstrap principal para acelerar retomada local
-- migration runner dedicado para provisionar estrutura e dados criticos
+- `synchronize: true` no bootstrap principal para acelerar desenvolvimento
+- migration runner dedicado para schema e dados estruturantes
 
-Isso funciona bem para desenvolvimento rapido, mas nao e a estrategia final recomendada para producao.
+Isso funciona para dev, mas o alvo de producao e migrar tudo para migrations.
 
 ### Estrategia alvo para producao
 
@@ -200,54 +207,57 @@ Isso funciona bem para desenvolvimento rapido, mas nao e a estrategia final reco
 ### Sincronizacao de estoque
 
 - `npm run inventory:sync`
-- `npm run inventory:sync -- <shopId>`
 
-## Integracao de estoque: Kafka Multimarcas
+### Espera do banco
 
-Ja provisionada no backend:
+- `npm run wait:db`
 
-- loja com ID fixo
-- usuario master
-- vendedor
-- feed remoto configurado
-- cron padrao diario
+### Docker
 
-O modulo de integracao:
+- `npm run docker:up`
+- `npm run docker:down`
+- `npm run docker:down:volumes`
 
-- busca o feed JSON
-- faz upsert por identificador externo do veiculo
-- desativa itens ausentes no feed novo
-- armazena payload original em `externalRaw`
-- registra horario e status da ultima sincronizacao
+## Integracao de estoque
+
+Resumo do desenho atual:
+
+- cada loja pode ter feed proprio
+- sincronizacao pode rodar por cron ou manualmente
+- veiculos sao importados com chave externa por loja
+- itens ausentes do feed sao desativados, nao apagados
+- payload bruto fica salvo para rastreabilidade
+
+Documento dedicado:
+
+- [INTEGRACAO_ESTOQUE_E_OPERACAO.md](c:/Users/pfsou/Projetos/auto-scan/backend/INTEGRACAO_ESTOQUE_E_OPERACAO.md)
 
 ## Chat IA
 
 Resumo do desenho atual:
 
-- memoria de sessao em memoria por `sessionId`
-- parsing simples de perfil comercial
+- sessoes persistidas em banco
+- mensagens persistidas em banco
+- memoria resumida por sessao
 - busca no estoque real
-- ranking por aderencia
+- ranking por aderencia comercial
 - criacao automatica de lead
+- tools explicitas do dominio
+- streaming SSE
+- observabilidade por eventos
 - opcionalmente reescreve a resposta com OpenAI
 
 Documento dedicado:
 
-- [AI_CHAT_ARCHITECTURE.md](c:\Users\pfsou\Projetos\auto-scan\auto-scan\backend\AI_CHAT_ARCHITECTURE.md)
+- [AI_CHAT_ARCHITECTURE.md](c:/Users/pfsou/Projetos/auto-scan/backend/AI_CHAT_ARCHITECTURE.md)
 
 ## Swagger
 
-A documentacao HTTP esta exposta em:
+Documentacao HTTP exposta em:
 
 - `http://localhost:3000/api/docs`
 - `http://localhost:3000/docs-json`
 - `http://localhost:3000/docs-yaml`
-
-Objetivo desta camada:
-
-- facilitar inspecao de endpoints
-- apoiar integracao com frontend
-- acelerar testes manuais e onboarding tecnico
 
 ## Pontos fortes atuais
 
@@ -255,21 +265,20 @@ Objetivo desta camada:
 - integracao real de estoque validada
 - chat comercial funcional
 - modulo por dominio organizado
-- documentacao crescente dentro do proprio repositorio
+- stack Docker pronta para dev
+- documentacao centralizada dentro do repositorio
 
 ## Dividas tecnicas conscientes
 
-- persistencia do chat ainda nao esta em banco
-- Swagger ainda pode evoluir com anotacoes mais ricas em DTOs e responses
-- estrategia de banco ainda precisa convergir para migrations completas
+- bootstrap principal ainda usa `synchronize`
+- Swagger ainda pode evoluir com schemas mais ricos
 - testes automatizados ainda sao limitados
+- integracao de estoque ainda pode ganhar retries e timeouts mais sofisticados
 
 ## Proximos passos arquiteturais recomendados
 
-1. persistir chat em banco
-2. adicionar streaming no atendimento
-3. enriquecer OpenAPI com schemas e seguranca por rota
-4. consolidar producao sem `synchronize`
-5. adicionar testes de integracao por modulo
-
-
+1. consolidar producao sem `synchronize`
+2. enriquecer OpenAPI com schemas e seguranca por rota
+3. adicionar testes de integracao por modulo
+4. ampliar observabilidade da sincronizacao de estoque
+5. conectar simulacao de financiamento a regras reais

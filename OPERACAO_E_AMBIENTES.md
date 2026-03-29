@@ -1,4 +1,4 @@
-# Operacao e Ambientes do Backend
+ï»¿# Operacao e Ambientes do Backend
 
 ## Objetivo
 
@@ -16,8 +16,8 @@ Objetivo:
 
 Componentes:
 
-- PostgreSQL via Docker Compose
-- backend NestJS local
+- PostgreSQL via Docker Compose ou local
+- backend NestJS
 - frontend Angular local
 
 ### Homologacao
@@ -56,7 +56,7 @@ Recomendacoes:
 
 Arquivo base:
 
-- [backend/.env.example](c:\Users\pfsou\Projetos\auto-scan\auto-scan\backend\.env.example)
+- [backend/.env.example](c:/Users/pfsou/Projetos/auto-scan/backend/.env.example)
 
 Variaveis atuais:
 
@@ -69,34 +69,41 @@ Variaveis atuais:
 - `JWT_SECRET`
 - `JWT_EXPIRES_IN`
 - `INVENTORY_SYNC_RUN_ON_STARTUP`
+- `DB_WAIT_MAX_ATTEMPTS`
+- `DB_WAIT_DELAY_MS`
 - `OPENAI_API_KEY`
 - `OPENAI_MODEL`
 
 ## Fluxo local recomendado
 
-### 1. Subir banco
-
-```bash
-docker compose up -d postgres
-```
-
-### 2. Rodar migrations
+### Opcao A: stack Docker completa
 
 ```bash
 cd backend
-npm run migration:run
+docker compose up --build
 ```
 
-### 3. Opcional: popular dados de demo
+Esse fluxo:
+
+- sobe PostgreSQL
+- cria o banco `auto_scan`
+- espera o banco responder
+- roda migrations
+- compila e sobe a API
+
+### Opcao B: backend local + banco local
+
+```bash
+cd backend
+npm install
+npm run migration:run
+npm run start:dev
+```
+
+### Opcional: popular dados de demo
 
 ```bash
 npm run seed
-```
-
-### 4. Rodar backend
-
-```bash
-npm run start:dev
 ```
 
 ## Swagger local
@@ -109,36 +116,24 @@ Com o backend rodando:
 
 ## Integracao de estoque
 
-### Cron por loja
+Documento operacional principal:
 
-Cada loja pode definir:
+- [INTEGRACAO_ESTOQUE_E_OPERACAO.md](c:/Users/pfsou/Projetos/auto-scan/backend/INTEGRACAO_ESTOQUE_E_OPERACAO.md)
 
-- feed de origem
-- codigo externo
-- expressao cron
-- status da ultima execucao
-
-### Execucao manual
-
-```bash
-cd backend
-npm run inventory:sync
-```
-
-### Rota HTTP
+Rotas principais:
 
 - `POST /api/InventorySync/shops/:shopId/run`
+- `POST /api/InventorySync/run-enabled`
+- `GET /api/InventorySync/shops/:shopId/status`
 
-### Estratégia operacional
+### Estrategia operacional
 
-- agendar sincronizacao recorrente
+- agendar sincronizacao recorrente por loja
 - permitir rerun manual para suporte
 - manter status e erro da ultima sincronizacao
 - desativar veiculos sumidos do feed em vez de apagar
 
 ## Seed e idempotencia
-
-A direcao recomendada para dados de apoio e:
 
 ### Seeds permanentes de ambiente de demo
 
@@ -178,8 +173,9 @@ A direcao recomendada para dados de apoio e:
 
 - `JWT_SECRET` forte e exclusivo por ambiente
 - `OPENAI_API_KEY` armazenada fora do repositorio
-- CORS restrito aos dominos reais do frontend
+- CORS restrito aos dominios reais do frontend
 - segredos em cofre ou secret manager
+- rotas operacionais protegidas com JWT
 
 ### Observabilidade
 
@@ -195,5 +191,4 @@ A direcao recomendada para dados de apoio e:
 3. enriquecer seed idempotente de homologacao
 4. adicionar testes de smoke no pipeline
 5. configurar logs e health checks externos
-6. adicionar protecao de rate limit para rotas publicas de chat
-
+6. adicionar rate limit para rotas publicas de chat

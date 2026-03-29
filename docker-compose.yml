@@ -1,0 +1,45 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: auto-scan-backend-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: auto_scan
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d auto_scan"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: auto-scan-backend-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PORT: 3000
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      DB_DATABASE: auto_scan
+      JWT_SECRET: ${JWT_SECRET:-auto-scan-local-secret}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      INVENTORY_SYNC_RUN_ON_STARTUP: ${INVENTORY_SYNC_RUN_ON_STARTUP:-false}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-mini}
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres_data:
