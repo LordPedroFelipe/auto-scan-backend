@@ -1,3 +1,4 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import {
   IsBoolean,
@@ -17,22 +18,26 @@ const toBoolean = ({ value }: { value: string }) =>
     : value === 'true' || value === '1';
 
 export class VehiclesQueryDto {
+  @ApiPropertyOptional({ example: 1, minimum: 1 })
   @IsOptional()
   @Transform(toNumber)
   @IsNumber()
   @Min(1)
   pageNumber?: number = 1;
 
+  @ApiPropertyOptional({ example: 10, minimum: 1 })
   @IsOptional()
   @Transform(toNumber)
   @IsNumber()
   @Min(1)
   pageSize?: number = 10;
 
+  @ApiPropertyOptional({ format: 'uuid' })
   @IsOptional()
   @IsUUID()
   shopId?: string;
 
+  @ApiPropertyOptional({ example: 'corolla' })
   @IsOptional()
   @IsString()
   q?: string;
@@ -41,6 +46,7 @@ export class VehiclesQueryDto {
   @IsString()
   search?: string;
 
+  @ApiPropertyOptional({ example: 'price_desc' })
   @IsOptional()
   @IsString()
   sort?: string;
@@ -155,6 +161,7 @@ export class VehiclesQueryDto {
   @IsBoolean()
   isHighlighted?: boolean;
 
+  @ApiPropertyOptional({ example: true })
   @IsOptional()
   @Transform(toBoolean)
   @IsBoolean()

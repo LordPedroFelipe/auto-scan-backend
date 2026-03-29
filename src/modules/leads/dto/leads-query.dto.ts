@@ -1,3 +1,4 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import {
   IsBoolean,
@@ -17,6 +18,7 @@ const toBoolean = ({ value }: { value: string }) =>
     : value === 'true' || value === '1';
 
 export class LeadsQueryDto {
+  @ApiPropertyOptional({ example: 'Carlos' })
   @IsOptional()
   @IsString()
   CustomerName?: string;
@@ -33,6 +35,7 @@ export class LeadsQueryDto {
   @IsString()
   CustomerCity?: string;
 
+  @ApiPropertyOptional({ example: 'New' })
   @IsOptional()
   @IsString()
   Status?: string;
@@ -49,6 +52,7 @@ export class LeadsQueryDto {
   @IsUUID()
   ShopId?: string;
 
+  @ApiPropertyOptional({ example: 1, minimum: 1 })
   @IsOptional()
   @Transform(toNumber)
   @IsNumber()
@@ -61,6 +65,7 @@ export class LeadsQueryDto {
   @Min(1)
   pageNumber?: number;
 
+  @ApiPropertyOptional({ example: 10, minimum: 1 })
   @IsOptional()
   @Transform(toNumber)
   @IsNumber()

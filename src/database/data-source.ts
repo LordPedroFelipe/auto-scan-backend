@@ -16,6 +16,7 @@ import { VehicleEntity } from '../modules/vehicles/entities/vehicle.entity';
 import { KafkaBootstrap1743300000000 } from './migrations/1743300000000-KafkaBootstrap';
 import { ChatAiUpgrade1743320000000 } from './migrations/1743320000000-ChatAiUpgrade';
 import { VehiclePhotoVariants1743311000000 } from './migrations/1743311000000-VehiclePhotoVariants';
+import { PlatformAdminBootstrap1743330000000 } from './migrations/1743330000000-PlatformAdminBootstrap';
 
 export const AppDataSource = new DataSource({
   type: 'postgres',
@@ -43,5 +44,6 @@ export const AppDataSource = new DataSource({
     KafkaBootstrap1743300000000,
     VehiclePhotoVariants1743311000000,
     ChatAiUpgrade1743320000000,
+    PlatformAdminBootstrap1743330000000,
   ],
 });

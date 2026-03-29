@@ -1,3 +1,4 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsNumber, IsOptional, IsString, IsUUID, Min } from 'class-validator';
 
@@ -5,6 +6,7 @@ const toNumber = ({ value }: { value: string }) =>
   value === undefined || value === null || value === '' ? undefined : Number(value);
 
 export class TestDrivesQueryDto {
+  @ApiPropertyOptional({ example: 'Fernanda' })
   @IsOptional()
   @IsString()
   customerName?: string;
@@ -21,6 +23,7 @@ export class TestDrivesQueryDto {
   @IsString()
   VehicleModel?: string;
 
+  @ApiPropertyOptional({ example: 'pending' })
   @IsOptional()
   @IsString()
   status?: string;
@@ -37,6 +40,7 @@ export class TestDrivesQueryDto {
   @IsUUID()
   ShopId?: string;
 
+  @ApiPropertyOptional({ example: 1, minimum: 1 })
   @IsOptional()
   @Transform(toNumber)
   @IsNumber()
@@ -49,6 +53,7 @@ export class TestDrivesQueryDto {
   @Min(1)
   PageNumber?: number;
 
+  @ApiPropertyOptional({ example: 10, minimum: 1 })
   @IsOptional()
   @Transform(toNumber)
   @IsNumber()

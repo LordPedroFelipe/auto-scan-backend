@@ -1,3 +1,4 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsNumber, IsOptional, IsString, IsUUID, Min } from 'class-validator';
 
@@ -5,6 +6,7 @@ const toNumber = ({ value }: { value: string }) =>
   value === undefined || value === null || value === '' ? undefined : Number(value);
 
 export class QrCodeQueryDto {
+  @ApiPropertyOptional({ format: 'uuid' })
   @IsOptional()
   @IsUUID()
   shopId?: string;
@@ -13,6 +15,7 @@ export class QrCodeQueryDto {
   @IsUUID()
   ShopId?: string;
 
+  @ApiPropertyOptional({ example: 'ABC1D23' })
   @IsOptional()
   @IsString()
   vehiclePlate?: string;
@@ -21,6 +24,7 @@ export class QrCodeQueryDto {
   @IsString()
   VehiclePlate?: string;
 
+  @ApiPropertyOptional({ example: 'vehicle' })
   @IsOptional()
   @IsString()
   redirectType?: string;
@@ -29,6 +33,7 @@ export class QrCodeQueryDto {
   @IsString()
   RedirectType?: string;
 
+  @ApiPropertyOptional({ example: 1, minimum: 1 })
   @IsOptional()
   @Transform(toNumber)
   @IsNumber()
@@ -41,6 +46,7 @@ export class QrCodeQueryDto {
   @Min(1)
   PageNumber?: number;
 
+  @ApiPropertyOptional({ example: 10, minimum: 1 })
   @IsOptional()
   @Transform(toNumber)
   @IsNumber()

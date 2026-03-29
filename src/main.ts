@@ -20,10 +20,19 @@ async function bootstrap(): Promise<void> {
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Auto Scan API')
     .setDescription(
-      'API do Auto Scan para autenticacao, estoque, leads, test drives, integracoes de estoque e chat com IA comercial.',
+      'API oficial do Auto Scan para autenticacao, operacao comercial, estoque, leads, test drives, QR Codes, cobranca, configuracoes e IA conversacional.',
     )
     .setVersion('0.2.0')
-    .addBearerAuth()
+    .addServer('/api', 'Servidor local com prefixo global')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        description: 'Informe o token JWT no formato Bearer.'
+      },
+      'bearer',
+    )
     .build();
 
   const swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig, {
@@ -39,6 +48,8 @@ async function bootstrap(): Promise<void> {
       persistAuthorization: true,
       displayRequestDuration: true,
       docExpansion: 'none',
+      tagsSorter: 'alpha',
+      operationsSorter: 'alpha',
     },
   });
 
