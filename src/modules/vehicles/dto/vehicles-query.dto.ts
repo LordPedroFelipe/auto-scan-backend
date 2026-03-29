@@ -55,6 +55,30 @@ export class VehiclesQueryDto {
 
   @IsOptional()
   @IsString()
+  version?: string;
+
+  @IsOptional()
+  @IsString()
+  color?: string;
+
+  @IsOptional()
+  @IsString()
+  transmission?: string;
+
+  @IsOptional()
+  @IsString()
+  fuelType?: string;
+
+  @IsOptional()
+  @IsString()
+  condition?: string;
+
+  @IsOptional()
+  @IsString()
+  categoryType?: string;
+
+  @IsOptional()
+  @IsString()
   city?: string;
 
   @IsOptional()
@@ -82,6 +106,41 @@ export class VehiclesQueryDto {
   maxYear?: number;
 
   @IsOptional()
+  @Transform(toNumber)
+  @IsNumber()
+  minMileage?: number;
+
+  @IsOptional()
+  @Transform(toNumber)
+  @IsNumber()
+  maxMileage?: number;
+
+  @IsOptional()
+  @Transform(toNumber)
+  @IsNumber()
+  ownersCountMin?: number;
+
+  @IsOptional()
+  @Transform(toNumber)
+  @IsNumber()
+  ownersCountMax?: number;
+
+  @IsOptional()
+  @Transform(toBoolean)
+  @IsBoolean()
+  hasAuction?: boolean;
+
+  @IsOptional()
+  @Transform(toBoolean)
+  @IsBoolean()
+  hasAccident?: boolean;
+
+  @IsOptional()
+  @Transform(toBoolean)
+  @IsBoolean()
+  isFirstOwner?: boolean;
+
+  @IsOptional()
   @Transform(toBoolean)
   @IsBoolean()
   isSold?: boolean;
@@ -90,6 +149,11 @@ export class VehiclesQueryDto {
   @Transform(toBoolean)
   @IsBoolean()
   isOnOffer?: boolean;
+
+  @IsOptional()
+  @Transform(toBoolean)
+  @IsBoolean()
+  isHighlighted?: boolean;
 
   @IsOptional()
   @Transform(toBoolean)

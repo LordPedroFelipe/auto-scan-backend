@@ -7,8 +7,10 @@ import {
   ParseUUIDPipe,
   Post,
   Put,
+  Query,
 } from '@nestjs/common';
 import { CreateTestDriveDto } from './dto/create-test-drive.dto';
+import { TestDrivesQueryDto } from './dto/test-drives-query.dto';
 import { UpdateTestDriveDto } from './dto/update-test-drive.dto';
 import { TestDrivesService } from './test-drives.service';
 
@@ -17,8 +19,8 @@ export class TestDrivesController {
   constructor(private readonly testDrivesService: TestDrivesService) {}
 
   @Get()
-  findAll() {
-    return this.testDrivesService.findAll();
+  findAll(@Query() query: TestDrivesQueryDto) {
+    return this.testDrivesService.findAll(query);
   }
 
   @Get(':id')

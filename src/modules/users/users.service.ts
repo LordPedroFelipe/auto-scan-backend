@@ -5,10 +5,12 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
+import { createHash } from 'crypto';
 import { Repository } from 'typeorm';
 import { ShopEntity } from '../shops/entities/shop.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UsersQueryDto } from './dto/users-query.dto';
 import { UserEntity } from './entities/user.entity';
 
 @Injectable()
@@ -20,15 +22,40 @@ export class UsersService {
     private readonly shopsRepository: Repository<ShopEntity>,
   ) {}
 
-  async findAll() {
-    return this.usersRepository.find({
-      relations: {
-        shop: true,
-      },
-      order: {
-        createdAt: 'DESC',
-      },
-    });
+  async findAll(query: UsersQueryDto = {}) {
+    const pageNumber = query.PageNumber ?? query.pageNumber ?? 1;
+    const pageSize = query.PageSize ?? query.pageSize ?? 10;
+    const search = query.q ?? query.search;
+    const shopId = query.ShopId ?? query.shopId;
+
+    const qb = this.usersRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.shop', 'shop');
+
+    if (shopId) {
+      qb.andWhere('user.shopId = :shopId', { shopId });
+    }
+
+    if (search) {
+      qb.andWhere(
+        '(user.userName ILIKE :search OR user.email ILIKE :search OR user.phoneNumber ILIKE :search)',
+        { search: `%${search}%` },
+      );
+    }
+
+    qb.orderBy('user.createdAt', 'DESC');
+    qb.skip((pageNumber - 1) * pageSize);
+    qb.take(pageSize);
+
+    const [items, totalCount] = await qb.getManyAndCount();
+
+    return {
+      items,
+      pageNumber,
+      pageSize,
+      totalCount,
+      totalPages: Math.ceil(totalCount / pageSize) || 1,
+    };
   }
 
   async listItems() {
@@ -110,6 +137,9 @@ export class UsersService {
       lockoutEnabled: false,
       accessFailedCount: 0,
       isActive: dto.isActive ?? true,
+      passwordResetTokenHash: null,
+      passwordResetExpiresAt: null,
+      welcomeEmailSentAt: null,
       shopId: dto.shopId ?? null,
     });
 
@@ -153,9 +183,53 @@ export class UsersService {
     return { success: true };
   }
 
+  async savePasswordResetToken(userId: string, token: string, expiresAt: Date) {
+    const user = await this.findOne(userId);
+    user.passwordResetTokenHash = this.hashToken(token);
+    user.passwordResetExpiresAt = expiresAt;
+    await this.usersRepository.save(user);
+  }
+
+  async findByPasswordResetToken(token: string) {
+    return this.usersRepository.findOne({
+      where: {
+        passwordResetTokenHash: this.hashToken(token),
+      },
+      relations: {
+        shop: true,
+      },
+    });
+  }
+
+  async updatePassword(userId: string, password: string) {
+    const user = await this.findOne(userId);
+    user.passwordHash = await bcrypt.hash(password, 10);
+    user.passwordResetTokenHash = null;
+    user.passwordResetExpiresAt = null;
+    await this.usersRepository.save(user);
+    return this.findOne(userId);
+  }
+
+  async clearPasswordResetToken(userId: string) {
+    const user = await this.findOne(userId);
+    user.passwordResetTokenHash = null;
+    user.passwordResetExpiresAt = null;
+    await this.usersRepository.save(user);
+  }
+
+  async markWelcomeEmailSent(userId: string) {
+    const user = await this.findOne(userId);
+    user.welcomeEmailSentAt = new Date();
+    await this.usersRepository.save(user);
+  }
+
   toSafeUser(user: UserEntity) {
     const { passwordHash: _passwordHash, ...safeUser } = user;
     return safeUser;
+  }
+
+  private hashToken(token: string) {
+    return createHash('sha256').update(token).digest('hex');
   }
 
   private async ensureShopExists(shopId: string) {

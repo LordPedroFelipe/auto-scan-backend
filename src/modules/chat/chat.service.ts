@@ -481,6 +481,13 @@ export class ChatService {
 
   private async resolveConversationContext(session: ChatSessionState, dto: SendChatMessageDto): Promise<ConversationContext> {
     let contextVehicle: VehicleEntity | null = null;
+    const selectedVehicle = await this.resolveSelectedVehicleFromMessage(session, dto.message);
+    if (selectedVehicle) {
+      session.vehicleId = selectedVehicle.id;
+      session.shopId = selectedVehicle.shopId;
+      contextVehicle = selectedVehicle;
+    }
+
     if (session.vehicleId) contextVehicle = await this.vehiclesRepository.findOne({ where: { id: session.vehicleId } });
 
     if (!contextVehicle && session.customerProfile.plate) {
@@ -492,6 +499,31 @@ export class ChatService {
 
     if (!session.shopId && dto.shopId) session.shopId = dto.shopId;
     return { contextVehicle, seller: session.shopId ? await this.pickSeller(session.shopId) : null };
+  }
+
+  private async resolveSelectedVehicleFromMessage(session: ChatSessionState, message: string) {
+    if (!session.lastRecommendedVehicleIds.length) return null;
+
+    const candidates = await this.vehiclesRepository.find({
+      where: session.lastRecommendedVehicleIds.map((id) => ({ id, isActive: true })),
+    });
+
+    if (!candidates.length) return null;
+
+    const normalizedMessage = this.normalize(message);
+    const explicitSelectionSignal = /(quero esse|quero este|esse veiculo|esse veículo|esse carro|este carro|gostei desse|fiquei com esse)/.test(normalizedMessage);
+
+    for (const vehicle of candidates) {
+      const title = this.normalize(`${vehicle.brand} ${vehicle.model}`);
+      const subtitle = this.normalize(vehicle.version ?? '');
+      const fullLabel = this.normalize([vehicle.brand, vehicle.model, vehicle.version, `r$ ${Number(vehicle.price).toLocaleString('pt-BR')}`].filter(Boolean).join(' '));
+
+      if (title && normalizedMessage.includes(title)) return vehicle;
+      if (subtitle && normalizedMessage.includes(subtitle)) return vehicle;
+      if (fullLabel && normalizedMessage.includes(fullLabel)) return vehicle;
+    }
+
+    return explicitSelectionSignal ? candidates[0] ?? null : null;
   }
 
   private async executeTools(

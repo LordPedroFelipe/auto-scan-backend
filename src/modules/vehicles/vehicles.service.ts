@@ -1,4 +1,4 @@
-import {
+ï»¿import {
   BadRequestException,
   Injectable,
   NotFoundException,
@@ -43,23 +43,125 @@ export class VehiclesService {
 
     if (search) {
       qb.andWhere(
-        '(vehicle.brand ILIKE :q OR vehicle.model ILIKE :q OR vehicle.version ILIKE :q OR shop.name ILIKE :q)',
+        `(
+          vehicle.brand ILIKE :q
+          OR vehicle.model ILIKE :q
+          OR vehicle.version ILIKE :q
+          OR vehicle.plate ILIKE :q
+          OR vehicle.color ILIKE :q
+          OR vehicle.categoryType ILIKE :q
+          OR vehicle.transmission ILIKE :q
+          OR vehicle.fuelType ILIKE :q
+          OR vehicle.city ILIKE :q
+          OR shop.name ILIKE :q
+        )`,
         { q: `%${search}%` },
       );
     }
 
-    if (query.brand) qb.andWhere('vehicle.brand ILIKE :brand', { brand: `%${query.brand}%` });
-    if (query.model) qb.andWhere('vehicle.model ILIKE :model', { model: `%${query.model}%` });
-    if (query.city) qb.andWhere('vehicle.city ILIKE :city', { city: `%${query.city}%` });
-    if (query.state) qb.andWhere('vehicle.state ILIKE :state', { state: `%${query.state}%` });
-    if (query.minPrice !== undefined) qb.andWhere('vehicle.price >= :minPrice', { minPrice: query.minPrice });
-    if (query.maxPrice !== undefined) qb.andWhere('vehicle.price <= :maxPrice', { maxPrice: query.maxPrice });
-    if (query.minYear !== undefined) qb.andWhere('vehicle.year >= :minYear', { minYear: query.minYear });
-    if (query.maxYear !== undefined) qb.andWhere('vehicle.year <= :maxYear', { maxYear: query.maxYear });
-    if (query.isSold !== undefined) qb.andWhere('vehicle.isSold = :isSold', { isSold: query.isSold });
-    if (query.isOnOffer !== undefined) qb.andWhere('vehicle.isOnOffer = :isOnOffer', { isOnOffer: query.isOnOffer });
+    if (query.brand) {
+      qb.andWhere('vehicle.brand ILIKE :brand', { brand: `%${query.brand}%` });
+    }
+    if (query.model) {
+      qb.andWhere('vehicle.model ILIKE :model', { model: `%${query.model}%` });
+    }
+    if (query.version) {
+      qb.andWhere('vehicle.version ILIKE :version', {
+        version: `%${query.version}%`,
+      });
+    }
+    if (query.color) {
+      qb.andWhere('vehicle.color ILIKE :color', { color: `%${query.color}%` });
+    }
+    if (query.transmission) {
+      qb.andWhere('vehicle.transmission ILIKE :transmission', {
+        transmission: `%${query.transmission}%`,
+      });
+    }
+    if (query.fuelType) {
+      qb.andWhere('vehicle.fuelType ILIKE :fuelType', {
+        fuelType: `%${query.fuelType}%`,
+      });
+    }
+    if (query.condition) {
+      qb.andWhere('vehicle.condition ILIKE :condition', {
+        condition: `%${query.condition}%`,
+      });
+    }
+    if (query.categoryType) {
+      qb.andWhere('vehicle.categoryType ILIKE :categoryType', {
+        categoryType: `%${query.categoryType}%`,
+      });
+    }
+    if (query.city) {
+      qb.andWhere('vehicle.city ILIKE :city', { city: `%${query.city}%` });
+    }
+    if (query.state) {
+      qb.andWhere('vehicle.state ILIKE :state', { state: `%${query.state}%` });
+    }
+    if (query.minPrice !== undefined) {
+      qb.andWhere('vehicle.price >= :minPrice', { minPrice: query.minPrice });
+    }
+    if (query.maxPrice !== undefined) {
+      qb.andWhere('vehicle.price <= :maxPrice', { maxPrice: query.maxPrice });
+    }
+    if (query.minYear !== undefined) {
+      qb.andWhere('vehicle.year >= :minYear', { minYear: query.minYear });
+    }
+    if (query.maxYear !== undefined) {
+      qb.andWhere('vehicle.year <= :maxYear', { maxYear: query.maxYear });
+    }
+    if (query.minMileage !== undefined) {
+      qb.andWhere('vehicle.mileage >= :minMileage', {
+        minMileage: query.minMileage,
+      });
+    }
+    if (query.maxMileage !== undefined) {
+      qb.andWhere('vehicle.mileage <= :maxMileage', {
+        maxMileage: query.maxMileage,
+      });
+    }
+    if (query.ownersCountMin !== undefined) {
+      qb.andWhere('vehicle.ownersCount >= :ownersCountMin', {
+        ownersCountMin: query.ownersCountMin,
+      });
+    }
+    if (query.ownersCountMax !== undefined) {
+      qb.andWhere('vehicle.ownersCount <= :ownersCountMax', {
+        ownersCountMax: query.ownersCountMax,
+      });
+    }
+    if (query.hasAuction !== undefined) {
+      qb.andWhere('vehicle.hasAuction = :hasAuction', {
+        hasAuction: query.hasAuction,
+      });
+    }
+    if (query.hasAccident !== undefined) {
+      qb.andWhere('vehicle.hasAccident = :hasAccident', {
+        hasAccident: query.hasAccident,
+      });
+    }
+    if (query.isFirstOwner !== undefined) {
+      qb.andWhere('vehicle.isFirstOwner = :isFirstOwner', {
+        isFirstOwner: query.isFirstOwner,
+      });
+    }
+    if (query.isSold !== undefined) {
+      qb.andWhere('vehicle.isSold = :isSold', { isSold: query.isSold });
+    }
+    if (query.isOnOffer !== undefined) {
+      qb.andWhere('vehicle.isOnOffer = :isOnOffer', { isOnOffer: query.isOnOffer });
+    }
+    if (query.isHighlighted !== undefined) {
+      qb.andWhere('vehicle.isHighlighted = :isHighlighted', {
+        isHighlighted: query.isHighlighted,
+      });
+    }
 
     switch (query.sort) {
+      case 'newest':
+        qb.orderBy('vehicle.createdAt', 'DESC');
+        break;
       case 'price_asc':
         qb.orderBy('vehicle.price', 'ASC');
         break;
@@ -68,6 +170,12 @@ export class VehiclesService {
         break;
       case 'mileage_asc':
         qb.orderBy('vehicle.mileage', 'ASC');
+        break;
+      case 'mileage_desc':
+        qb.orderBy('vehicle.mileage', 'DESC');
+        break;
+      case 'year_asc':
+        qb.orderBy('vehicle.year', 'ASC');
         break;
       case 'year_desc':
         qb.orderBy('vehicle.year', 'DESC');
@@ -124,7 +232,7 @@ export class VehiclesService {
     });
 
     if (!vehicle) {
-      throw new NotFoundException('Veículo não encontrado.');
+      throw new NotFoundException('VeÃ­culo nÃ£o encontrado.');
     }
 
     return this.toResponse(vehicle);
@@ -196,7 +304,7 @@ export class VehiclesService {
   private async ensureShopExists(shopId: string) {
     const shop = await this.shopsRepository.findOne({ where: { id: shopId } });
     if (!shop) {
-      throw new BadRequestException('Loja não encontrada.');
+      throw new BadRequestException('Loja nÃ£o encontrada.');
     }
   }
 

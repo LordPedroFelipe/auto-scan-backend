@@ -40,6 +40,15 @@ export class UserEntity {
   @Column({ default: true })
   isActive!: boolean;
 
+  @Column({ type: 'varchar', nullable: true, length: 128 })
+  passwordResetTokenHash!: string | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  passwordResetExpiresAt!: Date | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  welcomeEmailSentAt!: Date | null;
+
   @Column('simple-array', { default: 'Seller' })
   roles!: string[];
 

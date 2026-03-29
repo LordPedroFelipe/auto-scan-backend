@@ -1,5 +1,6 @@
-import { Controller, Get, Header, Param, ParseUUIDPipe, Post, Body } from '@nestjs/common';
+import { Body, Controller, Get, Header, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
 import { CreateQrCodeDto } from './dto/create-qr-code.dto';
+import { QrCodeQueryDto } from './dto/qr-code-query.dto';
 import { QrCodeService } from './qrcode.service';
 
 @Controller('QRCode')
@@ -7,13 +8,16 @@ export class QrCodeController {
   constructor(private readonly qrCodeService: QrCodeService) {}
 
   @Get()
-  findAll() {
-    return this.qrCodeService.findAll();
+  findAll(@Query() query: QrCodeQueryDto) {
+    return this.qrCodeService.findAll(query);
   }
 
   @Get('shop/:shopId')
-  findByShop(@Param('shopId', new ParseUUIDPipe()) shopId: string) {
-    return this.qrCodeService.findByShop(shopId);
+  findByShop(
+    @Param('shopId', new ParseUUIDPipe()) shopId: string,
+    @Query() query: QrCodeQueryDto,
+  ) {
+    return this.qrCodeService.findAll({ ...query, shopId });
   }
 
   @Post('shop/:shopId')

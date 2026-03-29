@@ -4,12 +4,14 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from './modules/auth/auth.module';
 import { ChatModule } from './modules/chat/chat.module';
+import { EmailModule } from './modules/email/email.module';
 import { InventorySyncModule } from './modules/inventory-sync/inventory-sync.module';
 import { LeadNotesModule } from './modules/lead-notes/lead-notes.module';
 import { LeadsModule } from './modules/leads/leads.module';
 import { PermissionsModule } from './modules/permissions/permissions.module';
 import { QrCodeModule } from './modules/qrcode/qrcode.module';
 import { ReportsModule } from './modules/reports/reports.module';
+import { SettingsModule } from './modules/settings/settings.module';
 import { ShopsModule } from './modules/shops/shops.module';
 import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
 import { TestDrivesModule } from './modules/test-drives/test-drives.module';
@@ -38,11 +40,13 @@ import { VehiclesModule } from './modules/vehicles/vehicles.module';
     }),
     AuthModule,
     ChatModule,
+    EmailModule,
     InventorySyncModule,
     LeadNotesModule,
     PermissionsModule,
     QrCodeModule,
     ReportsModule,
+    SettingsModule,
     UsersModule,
     ShopsModule,
     SubscriptionsModule,

@@ -27,8 +27,11 @@ export class LeadsService {
   ) {}
 
   async findAll(query: LeadsQueryDto) {
-    const pageNumber = query.PageNumber ?? 1;
-    const pageSize = query.PageSize ?? 10;
+    const pageNumber = query.PageNumber ?? query.pageNumber ?? 1;
+    const pageSize = query.PageSize ?? query.pageSize ?? 10;
+    const shopId = query.shopId ?? query.ShopId;
+    const orderBy = query.OrderBy ?? query.orderBy ?? 'CreatedAt';
+    const isDescending = query.IsDescending ?? query.isDescending ?? true;
 
     const qb = this.leadsRepository
       .createQueryBuilder('lead')
@@ -36,6 +39,7 @@ export class LeadsService {
       .leftJoinAndSelect('lead.vehicle', 'vehicle')
       .leftJoinAndSelect('lead.seller', 'seller');
 
+    if (shopId) qb.andWhere('lead.shopId = :shopId', { shopId });
     if (query.CustomerName) qb.andWhere('lead.name ILIKE :name', { name: `%${query.CustomerName}%` });
     if (query.CustomerEmail) qb.andWhere('lead.email ILIKE :email', { email: `%${query.CustomerEmail}%` });
     if (query.CustomerPhone) qb.andWhere('lead.phone ILIKE :phone', { phone: `%${query.CustomerPhone}%` });
@@ -43,7 +47,25 @@ export class LeadsService {
     if (query.Status) qb.andWhere('lead.status = :status', { status: query.Status });
     if (query.SellerId) qb.andWhere('lead.sellerId = :sellerId', { sellerId: query.SellerId });
 
-    qb.orderBy('lead.createdAt', 'DESC');
+    switch (orderBy) {
+      case 'Name':
+      case 'name':
+        qb.orderBy('lead.name', isDescending ? 'DESC' : 'ASC');
+        break;
+      case 'LastContactDate':
+      case 'lastContactDate':
+        qb.orderBy('lead.lastContactDate', isDescending ? 'DESC' : 'ASC', 'NULLS LAST');
+        break;
+      case 'ContactDate':
+      case 'contactDate':
+        qb.orderBy('lead.contactDate', isDescending ? 'DESC' : 'ASC', 'NULLS LAST');
+        break;
+      case 'CreatedAt':
+      case 'createdAt':
+      default:
+        qb.orderBy('lead.createdAt', isDescending ? 'DESC' : 'ASC');
+        break;
+    }
     qb.skip((pageNumber - 1) * pageSize);
     qb.take(pageSize);
 
@@ -82,7 +104,11 @@ export class LeadsService {
   }
 
   async create(dto: CreateLeadDto) {
-    await this.ensureRelations(dto.shopId, dto.vehicleId, dto.sellerId);
+    const { shopId, vehicleId } = await this.resolveShopAndVehicle(
+      dto.shopId,
+      dto.vehicleId,
+    );
+    await this.ensureRelations(shopId, vehicleId, dto.sellerId);
 
     const lead = this.leadsRepository.create({
       ...dto,
@@ -94,8 +120,8 @@ export class LeadsService {
       contactDate: dto.contactDate ? new Date(dto.contactDate) : null,
       lastContactDate: dto.lastContactDate ? new Date(dto.lastContactDate) : null,
       isActive: dto.isActive ?? true,
-      shopId: dto.shopId ?? null,
-      vehicleId: dto.vehicleId ?? null,
+      shopId,
+      vehicleId,
       sellerId: dto.sellerId ?? null,
     });
 
@@ -105,12 +131,18 @@ export class LeadsService {
 
   async update(id: string, dto: UpdateLeadDto) {
     const lead = await this.findOne(id);
-    await this.ensureRelations(dto.shopId, dto.vehicleId, dto.sellerId);
+    const { shopId, vehicleId } = await this.resolveShopAndVehicle(
+      dto.shopId ?? lead.shopId,
+      dto.vehicleId ?? lead.vehicleId,
+    );
+    await this.ensureRelations(shopId, vehicleId, dto.sellerId);
 
     Object.assign(lead, dto);
     if (dto.contactDate) lead.contactDate = new Date(dto.contactDate);
     if (dto.lastContactDate) lead.lastContactDate = new Date(dto.lastContactDate);
     if (dto.email) lead.email = dto.email.toLowerCase();
+    lead.shopId = shopId;
+    lead.vehicleId = vehicleId;
 
     const savedLead = await this.leadsRepository.save(lead);
     return this.findOne(savedLead.id);
@@ -139,5 +171,35 @@ export class LeadsService {
       const seller = await this.usersRepository.findOne({ where: { id: sellerId } });
       if (!seller) throw new BadRequestException('Usuário vendedor não encontrado.');
     }
+  }
+
+  private async resolveShopAndVehicle(
+    shopId?: string | null,
+    vehicleId?: string | null,
+  ) {
+    if (!vehicleId) {
+      return {
+        shopId: shopId ?? null,
+        vehicleId: null,
+      };
+    }
+
+    const vehicle = await this.vehiclesRepository.findOne({
+      where: { id: vehicleId },
+    });
+    if (!vehicle) {
+      throw new BadRequestException('Veículo não encontrado.');
+    }
+
+    if (shopId && vehicle.shopId && shopId !== vehicle.shopId) {
+      throw new BadRequestException(
+        'O veículo informado pertence a outra loja.',
+      );
+    }
+
+    return {
+      shopId: shopId ?? vehicle.shopId ?? null,
+      vehicleId,
+    };
   }
 }

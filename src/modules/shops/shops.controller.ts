@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CreateShopDto } from './dto/create-shop.dto';
+import { CreateShopOnboardingDto } from './dto/create-shop-onboarding.dto';
 import { UpdateShopDto } from './dto/update-shop.dto';
 import { ShopsService } from './shops.service';
 
@@ -38,6 +39,11 @@ export class ShopsController {
   @Post()
   create(@Body() dto: CreateShopDto) {
     return this.shopsService.create(dto);
+  }
+
+  @Post('onboarding')
+  createOnboarding(@Body() dto: CreateShopOnboardingDto) {
+    return this.shopsService.createOnboarding(dto);
   }
 
   @UseGuards(JwtAuthGuard)

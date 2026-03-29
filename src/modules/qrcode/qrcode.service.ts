@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CreateQrCodeDto } from './dto/create-qr-code.dto';
+import { QrCodeQueryDto } from './dto/qr-code-query.dto';
 import { QrCodeEntity } from './entities/qr-code.entity';
 
 @Injectable()
@@ -11,17 +12,39 @@ export class QrCodeService {
     private readonly qrCodeRepository: Repository<QrCodeEntity>,
   ) {}
 
-  findAll() {
-    return this.qrCodeRepository.find({
-      order: { createdAt: 'DESC' },
-    });
-  }
+  async findAll(query: QrCodeQueryDto = {}) {
+    const pageNumber = query.PageNumber ?? query.pageNumber ?? 1;
+    const pageSize = query.PageSize ?? query.pageSize ?? 10;
+    const shopId = query.ShopId ?? query.shopId;
+    const vehiclePlate = query.VehiclePlate ?? query.vehiclePlate;
+    const redirectType = query.RedirectType ?? query.redirectType;
 
-  findByShop(shopId: string) {
-    return this.qrCodeRepository.find({
-      where: { shopId },
-      order: { createdAt: 'DESC' },
-    });
+    const qb = this.qrCodeRepository.createQueryBuilder('qrCode');
+
+    if (shopId) {
+      qb.andWhere('qrCode.shopId = :shopId', { shopId });
+    }
+    if (vehiclePlate) {
+      qb.andWhere('qrCode.vehiclePlate ILIKE :vehiclePlate', {
+        vehiclePlate: `%${vehiclePlate}%`,
+      });
+    }
+    if (redirectType) {
+      qb.andWhere('qrCode.redirectType = :redirectType', { redirectType });
+    }
+
+    qb.orderBy('qrCode.createdAt', 'DESC');
+    qb.skip((pageNumber - 1) * pageSize);
+    qb.take(pageSize);
+
+    const [items, totalCount] = await qb.getManyAndCount();
+    return {
+      items,
+      pageNumber,
+      pageSize,
+      totalCount,
+      totalPages: Math.ceil(totalCount / pageSize) || 1,
+    };
   }
 
   async create(shopId: string, dto: CreateQrCodeDto) {
