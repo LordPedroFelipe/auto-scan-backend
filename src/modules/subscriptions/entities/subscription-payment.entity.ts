@@ -5,6 +5,7 @@ import {
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
+  UpdateDateColumn,
 } from 'typeorm';
 import { ShopEntity } from '../../shops/entities/shop.entity';
 import { SubscriptionEntity } from './subscription.entity';
@@ -51,6 +52,39 @@ export class SubscriptionPaymentEntity {
   @Column({ type: 'text', nullable: true })
   invoiceUrl!: string | null;
 
+  @Column({ type: 'varchar', nullable: true, length: 40 })
+  billingProvider!: string | null;
+
+  @Column({ type: 'varchar', nullable: true, length: 80 })
+  paymentMethod!: string | null;
+
+  @Column({ type: 'varchar', nullable: true, length: 160 })
+  providerPaymentId!: string | null;
+
+  @Column({ type: 'varchar', nullable: true, length: 160 })
+  providerCustomerId!: string | null;
+
+  @Column({ type: 'varchar', nullable: true, length: 160 })
+  externalReference!: string | null;
+
+  @Column({ type: 'varchar', nullable: true, length: 255 })
+  pixQrCode!: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  pixCopyPaste!: string | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  dueDate!: Date | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  paidAt!: Date | null;
+
+  @Column({ type: 'jsonb', nullable: true })
+  providerPayload!: Record<string, unknown> | null;
+
   @CreateDateColumn()
   createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
 }

@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ShopEntity } from '../shops/entities/shop.entity';
 import { UserEntity } from '../users/entities/user.entity';
+import { AsaasBillingService } from './asaas-billing.service';
 import { SubscriptionPaymentEntity } from './entities/subscription-payment.entity';
 import { SubscriptionEntity } from './entities/subscription.entity';
 import { SubscriptionsController } from './subscriptions.controller';
@@ -9,6 +11,7 @@ import { SubscriptionsService } from './subscriptions.service';
 
 @Module({
   imports: [
+    ConfigModule,
     TypeOrmModule.forFeature([
       SubscriptionEntity,
       SubscriptionPaymentEntity,
@@ -17,6 +20,6 @@ import { SubscriptionsService } from './subscriptions.service';
     ]),
   ],
   controllers: [SubscriptionsController],
-  providers: [SubscriptionsService],
+  providers: [SubscriptionsService, AsaasBillingService],
 })
 export class SubscriptionsModule {}

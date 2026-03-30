@@ -35,7 +35,7 @@ import { VehiclesModule } from './modules/vehicles/vehicles.module';
         password: configService.get<string>('DB_PASSWORD', 'postgres'),
         database: configService.get<string>('DB_DATABASE', 'auto_scan'),
         autoLoadEntities: true,
-        synchronize: true,
+        synchronize: false,
       }),
     }),
     AuthModule,

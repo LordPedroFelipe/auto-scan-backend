@@ -5,6 +5,11 @@
   "description": "Backend NestJS + TypeORM + PostgreSQL para o projeto Auto Scan",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "docs:build": "npm --prefix docs-site run build",
+    "docs:dev": "npm --prefix docs-site run start",
+    "docs:install": "npm --prefix docs-site install",
+    "docs:serve": "npm --prefix docs-site run serve",
+    "docs:typecheck": "npm --prefix docs-site run typecheck",
     "migration:run": "ts-node src/scripts/run-migrations.ts",
     "inventory:sync": "ts-node src/scripts/sync-inventory.ts",
     "seed": "ts-node src/scripts/seed.ts",

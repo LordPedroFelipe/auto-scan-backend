@@ -17,6 +17,8 @@ import { KafkaBootstrap1743300000000 } from './migrations/1743300000000-KafkaBoo
 import { ChatAiUpgrade1743320000000 } from './migrations/1743320000000-ChatAiUpgrade';
 import { VehiclePhotoVariants1743311000000 } from './migrations/1743311000000-VehiclePhotoVariants';
 import { PlatformAdminBootstrap1743330000000 } from './migrations/1743330000000-PlatformAdminBootstrap';
+import { ShopSettingsPreferences1743340000000 } from './migrations/1743340000000-ShopSettingsPreferences';
+import { BillingProductionReadiness1743350000000 } from './migrations/1743350000000-BillingProductionReadiness';
 
 export const AppDataSource = new DataSource({
   type: 'postgres',
@@ -45,5 +47,7 @@ export const AppDataSource = new DataSource({
     VehiclePhotoVariants1743311000000,
     ChatAiUpgrade1743320000000,
     PlatformAdminBootstrap1743330000000,
+    ShopSettingsPreferences1743340000000,
+    BillingProductionReadiness1743350000000,
   ],
 });

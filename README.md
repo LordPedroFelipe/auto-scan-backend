@@ -1,6 +1,17 @@
-﻿# Backend Auto Scan
+# Backend Auto Scan
 
 Backend em NestJS + TypeORM + PostgreSQL para o projeto Auto Scan.
+
+## Portal de documentacao
+
+O backend agora possui um portal de documentacao em Docusaurus dentro de [docs-site](../auto-scan/backend/docs-site).
+
+Scripts principais:
+
+- `npm run docs:install`
+- `npm run docs:dev`
+- `npm run docs:build`
+- `npm run docs:serve`
 
 ## Stack
 
@@ -29,6 +40,8 @@ Backend em NestJS + TypeORM + PostgreSQL para o projeto Auto Scan.
 - `Subscriptions`
 - `InventorySync`
 - `Chat`
+- `Email`
+- `Settings`
 
 ## Como rodar com Docker
 
@@ -81,19 +94,33 @@ npm run seed
 - `npm run docker:up`
 - `npm run docker:down`
 - `npm run docker:down:volumes`
+- `npm run docs:install`
+- `npm run docs:dev`
+- `npm run docs:build`
+- `npm run docs:serve`
 
 ## Documentacao do backend
 
-- [AI_CHAT_ARCHITECTURE.md](c:/Users/pfsou/Projetos/auto-scan/backend/AI_CHAT_ARCHITECTURE.md)
-- [ARQUITETURA_BACKEND.md](c:/Users/pfsou/Projetos/auto-scan/backend/ARQUITETURA_BACKEND.md)
-- [OPERACAO_E_AMBIENTES.md](c:/Users/pfsou/Projetos/auto-scan/backend/OPERACAO_E_AMBIENTES.md)
-- [INTEGRACAO_ESTOQUE_E_OPERACAO.md](c:/Users/pfsou/Projetos/auto-scan/backend/INTEGRACAO_ESTOQUE_E_OPERACAO.md)
+O conteudo principal foi reorganizado no Docusaurus com trilhas para:
+
+- visao geral e getting started
+- arquitetura por dominio
+- operacao e ambientes
+- integracoes de estoque, IA, cobranca e comunicacao
+- Swagger e contratos da API
+
+Documentos-base mantidos no repositorio:
+
+- [AI_CHAT_ARCHITECTURE.md](../auto-scan/backend/AI_CHAT_ARCHITECTURE.md)
+- [ARQUITETURA_BACKEND.md](../auto-scan/backend/ARQUITETURA_BACKEND.md)
+- [OPERACAO_E_AMBIENTES.md](../auto-scan/backend/OPERACAO_E_AMBIENTES.md)
+- [INTEGRACAO_ESTOQUE_E_OPERACAO.md](../auto-scan/backend/INTEGRACAO_ESTOQUE_E_OPERACAO.md)
 
 ## Variaveis de ambiente
 
 Arquivo base:
 
-- [backend/.env.example](c:/Users/pfsou/Projetos/auto-scan/backend/.env.example)
+- [backend/.env.example](../auto-scan/backend/.env.example)
 
 Campos atuais:
 
@@ -110,6 +137,21 @@ Campos atuais:
 - `DB_WAIT_DELAY_MS`
 - `OPENAI_API_KEY`
 - `OPENAI_MODEL`
+- `FRONTEND_BASE_URL`
+- `MAIL_FROM_NAME`
+- `MAIL_FROM_EMAIL`
+- `SMTP_HOST`
+- `SMTP_PORT`
+- `SMTP_SECURE`
+- `SMTP_USER`
+- `SMTP_PASS`
+- `ASAAS_API_KEY`
+- `ASAAS_ENV`
+- `ASAAS_BASE_URL`
+- `ASAAS_WEBHOOK_URL`
+- `ASAAS_WALLET_ID`
+- `ASAAS_WEBHOOK_TOKEN`
+- `ASAAS_TIMEOUT_MS`
 
 ## Integracao de estoque
 
@@ -123,7 +165,7 @@ O backend ja possui integracao real de estoque por loja com:
 
 Documento principal:
 
-- [INTEGRACAO_ESTOQUE_E_OPERACAO.md](c:/Users/pfsou/Projetos/auto-scan/backend/INTEGRACAO_ESTOQUE_E_OPERACAO.md)
+- [INTEGRACAO_ESTOQUE_E_OPERACAO.md](../auto-scan/backend/INTEGRACAO_ESTOQUE_E_OPERACAO.md)
 
 ## Chat IA
 
@@ -139,5 +181,4 @@ O backend ja possui uma base real de vendedor digital com:
 
 Documento principal:
 
-- [AI_CHAT_ARCHITECTURE.md](c:/Users/pfsou/Projetos/auto-scan/backend/AI_CHAT_ARCHITECTURE.md)
-
+- [AI_CHAT_ARCHITECTURE.md](../auto-scan/backend/AI_CHAT_ARCHITECTURE.md)

@@ -67,6 +67,21 @@ export class ShopEntity {
   @Column({ type: 'text', nullable: true })
   inventoryLastSyncError!: string | null;
 
+  @Column({ type: 'jsonb', default: () => "'{}'::jsonb" })
+  settingsPreferences!: Record<string, unknown>;
+
+  @Column({ type: 'jsonb', default: () => "'[]'::jsonb" })
+  notificationPreferences!: Array<Record<string, unknown>>;
+
+  @Column({ type: 'varchar', nullable: true, length: 40 })
+  billingCustomerProvider!: string | null;
+
+  @Column({ type: 'varchar', nullable: true, length: 120 })
+  billingCustomerExternalId!: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  billingCustomerSyncedAt!: Date | null;
+
   @Column({ type: 'uuid', nullable: true })
   ownerId!: string | null;
 
