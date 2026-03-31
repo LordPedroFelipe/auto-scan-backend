@@ -6,7 +6,6 @@ import { randomUUID } from 'crypto';
 import { Observable, Subject } from 'rxjs';
 import { DataSource, Repository } from 'typeorm';
 import { LeadEntity, LeadStatus } from '../leads/entities/lead.entity';
-import { KAFKA_MULTIMARCAS_SHOP_ID } from '../inventory-sync/inventory-sync.constants';
 import { ShopEntity } from '../shops/entities/shop.entity';
 import { TestDriveEntity, TestDriveStatus } from '../test-drives/entities/test-drive.entity';
 import { JwtUser } from '../auth/jwt-user.interface';

@@ -1,7 +1,6 @@
 import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../app.module';
-import { KAFKA_MULTIMARCAS_SHOP_ID } from '../modules/inventory-sync/inventory-sync.constants';
 import { InventorySyncService } from '../modules/inventory-sync/inventory-sync.service';
 
 async function run() {
@@ -11,7 +10,10 @@ async function run() {
 
   try {
     const inventorySyncService = app.get(InventorySyncService);
-    const shopId = process.argv[2] || KAFKA_MULTIMARCAS_SHOP_ID;
+    const shopId = process.argv[2];
+    if (!shopId) {
+      throw new Error('Informe o shopId como primeiro argumento para rodar a sincronizacao.');
+    }
     const result = await inventorySyncService.syncShopInventory(shopId);
     console.log(JSON.stringify(result, null, 2));
   } finally {

@@ -7,7 +7,17 @@ export enum BillingCheckoutMethod {
   Undefined = 'UNDEFINED',
 }
 
+export enum BillingCycle {
+  Monthly = 'Monthly',
+  Yearly = 'Yearly',
+}
+
 export class CreateBillingCheckoutDto {
+  @ApiPropertyOptional({ enum: BillingCycle, example: BillingCycle.Monthly })
+  @IsOptional()
+  @IsEnum(BillingCycle)
+  billingCycle?: BillingCycle;
+
   @ApiProperty({ enum: BillingCheckoutMethod, example: BillingCheckoutMethod.Pix })
   @IsEnum(BillingCheckoutMethod)
   paymentMethod!: BillingCheckoutMethod;

@@ -1,15 +1,19 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { CronJob } from 'cron';
 import { SchedulerRegistry } from '@nestjs/schedule';
 import { Repository } from 'typeorm';
+import { JwtUser } from '../auth/jwt-user.interface';
 import { ShopEntity } from '../shops/entities/shop.entity';
 import { VehicleEntity } from '../vehicles/entities/vehicle.entity';
+import { InventorySyncLogsQueryDto } from './dto/inventory-sync-logs-query.dto';
 import {
-  KAFKA_MULTIMARCAS_DEFAULT_CRON,
-  KAFKA_MULTIMARCAS_FEED_URL,
-  KAFKA_MULTIMARCAS_IMAGE_BUCKET_BASE_URL,
-  KAFKA_MULTIMARCAS_SOURCE_NAME,
+  InventorySyncLogEntity,
+  InventorySyncTriggerType,
+} from './entities/inventory-sync-log.entity';
+import {
+  DEFAULT_INVENTORY_SOURCE_NAME,
+  DEFAULT_INVENTORY_SYNC_CRON,
 } from './inventory-sync.constants';
 import {
   ExternalInventoryFeed,
@@ -26,6 +30,8 @@ export class InventorySyncService {
     private readonly shopsRepository: Repository<ShopEntity>,
     @InjectRepository(VehicleEntity)
     private readonly vehiclesRepository: Repository<VehicleEntity>,
+    @InjectRepository(InventorySyncLogEntity)
+    private readonly inventorySyncLogRepository: Repository<InventorySyncLogEntity>,
     private readonly schedulerRegistry: SchedulerRegistry,
   ) {}
 
@@ -51,7 +57,7 @@ export class InventorySyncService {
     }
   }
 
-  async syncEnabledShops() {
+  async syncEnabledShops(triggerType: InventorySyncTriggerType = 'bulk') {
     const shops = await this.shopsRepository.find({
       where: {
         inventorySyncEnabled: true,
@@ -63,7 +69,7 @@ export class InventorySyncService {
 
     const results: InventorySyncResult[] = [];
     for (const shop of shops) {
-      results.push(await this.syncShopInventory(shop.id));
+      results.push(await this.syncShopInventory(shop.id, { triggerType }));
     }
 
     return results;
@@ -93,7 +99,7 @@ export class InventorySyncService {
       where: {
         shopId,
         isActive: true,
-        integrationSource: KAFKA_MULTIMARCAS_SOURCE_NAME,
+        integrationSource: this.resolveIntegrationSource(shop),
       },
     });
 
@@ -102,7 +108,7 @@ export class InventorySyncService {
       shopName: shop.name,
       inventoryFeedUrl: shop.inventoryFeedUrl,
       inventorySourceCode: shop.inventorySourceCode,
-      inventorySyncCron: shop.inventorySyncCron ?? KAFKA_MULTIMARCAS_DEFAULT_CRON,
+      inventorySyncCron: shop.inventorySyncCron ?? DEFAULT_INVENTORY_SYNC_CRON,
       inventorySyncEnabled: shop.inventorySyncEnabled,
       inventoryLastSyncAt: shop.inventoryLastSyncAt,
       inventoryLastSyncStatus: shop.inventoryLastSyncStatus,
@@ -111,7 +117,87 @@ export class InventorySyncService {
     };
   }
 
-  async syncShopInventory(shopId: string): Promise<InventorySyncResult> {
+  async listLogs(query: InventorySyncLogsQueryDto, user: JwtUser) {
+    this.ensureAdmin(user);
+
+    const page = Math.max(1, Number(query.page ?? 1));
+    const pageSize = [10, 20, 50].includes(Number(query.pageSize)) ? Number(query.pageSize) : 10;
+
+    const qb = this.inventorySyncLogRepository.createQueryBuilder('log');
+
+    if (query.shopId) {
+      qb.andWhere('log.shopId = :shopId', { shopId: query.shopId });
+    }
+
+    if (query.status) {
+      qb.andWhere('log.status = :status', { status: query.status });
+    }
+
+    if (query.triggerType) {
+      qb.andWhere('log.triggerType = :triggerType', { triggerType: query.triggerType });
+    }
+
+    if (query.search?.trim()) {
+      const search = `%${query.search.trim().toLowerCase()}%`;
+      qb.andWhere(
+        `
+          LOWER(log.shopName) LIKE :search
+          OR LOWER(COALESCE(log.inventorySourceName, '')) LIKE :search
+          OR LOWER(COALESCE(log.inventorySourceCode, '')) LIKE :search
+          OR LOWER(COALESCE(log.inventoryFeedUrl, '')) LIKE :search
+          OR LOWER(COALESCE(log.errorMessage, '')) LIKE :search
+        `,
+        { search },
+      );
+    }
+
+    if (query.dateFrom) {
+      qb.andWhere('log.startedAt >= :dateFrom', { dateFrom: `${query.dateFrom}T00:00:00.000Z` });
+    }
+
+    if (query.dateTo) {
+      qb.andWhere('log.startedAt <= :dateTo', { dateTo: `${query.dateTo}T23:59:59.999Z` });
+    }
+
+    qb.orderBy('log.startedAt', 'DESC');
+
+    const [items, totalCount, successCount, errorCount] = await Promise.all([
+      qb.clone().skip((page - 1) * pageSize).take(pageSize).getMany(),
+      qb.clone().getCount(),
+      qb.clone().andWhere('log.status = :successStatus', { successStatus: 'success' }).getCount(),
+      qb.clone().andWhere('log.status = :errorStatus', { errorStatus: 'error' }).getCount(),
+    ]);
+
+    return {
+      items,
+      page,
+      pageSize,
+      totalCount,
+      successCount,
+      errorCount,
+    };
+  }
+
+  async getLogById(logId: string, user: JwtUser) {
+    this.ensureAdmin(user);
+
+    const log = await this.inventorySyncLogRepository.findOne({
+      where: { id: logId },
+    });
+
+    if (!log) {
+      throw new NotFoundException('Log de integracao nao encontrado.');
+    }
+
+    return log;
+  }
+
+  async syncShopInventory(
+    shopId: string,
+    options?: { triggerType?: InventorySyncTriggerType },
+  ): Promise<InventorySyncResult> {
+    const startedAt = new Date();
+    const triggerType = options?.triggerType ?? 'manual';
     const shop = await this.shopsRepository.findOne({
       where: { id: shopId },
     });
@@ -121,7 +207,13 @@ export class InventorySyncService {
     }
 
     try {
-      const feed = await this.fetchFeed(shop.inventoryFeedUrl ?? KAFKA_MULTIMARCAS_FEED_URL);
+      const feedUrl = shop.inventoryFeedUrl?.trim();
+      if (!feedUrl) {
+        throw new Error('Loja sem URL de feed configurada para sincronizacao.');
+      }
+
+      const integrationSource = this.resolveIntegrationSource(shop);
+      const feed = await this.fetchFeed(feedUrl);
       const now = new Date();
       const activeRecords = (feed.veiculos ?? []).filter(
         (record) => record.situacao === '1' && !!record.cod_veiculo,
@@ -130,7 +222,7 @@ export class InventorySyncService {
       const existingVehicles = await this.vehiclesRepository.find({
         where: {
           shopId,
-          integrationSource: KAFKA_MULTIMARCAS_SOURCE_NAME,
+          integrationSource,
         },
       });
 
@@ -153,7 +245,7 @@ export class InventorySyncService {
         const entity = existing ?? this.vehiclesRepository.create();
         const isNew = !existing;
 
-        this.applyExternalVehicle(entity, shop, feed, record, now);
+        this.applyExternalVehicle(entity, shop, feed, record, now, integrationSource);
         vehiclesToSave.push(entity);
 
         if (isNew) created += 1;
@@ -199,6 +291,25 @@ export class InventorySyncService {
         `Estoque sincronizado para ${shop.name}: ${created} criados, ${updated} atualizados, ${vehiclesToDeactivate.length} desativados.`,
       );
 
+      await this.registerLog({
+        shop,
+        startedAt,
+        finishedAt: new Date(),
+        triggerType,
+        status: 'success',
+        imported: activeRecords.length,
+        created,
+        updated,
+        deactivated: vehiclesToDeactivate.length,
+        totalInFeed: feed.total ?? activeRecords.length,
+        activeIntegratedVehicles: activeRecords.length,
+        errorMessage: null,
+        metadata: {
+          integrationSource,
+          feedStoreCode: feed.cod_loja,
+        },
+      });
+
       return result;
     } catch (error) {
       const message =
@@ -208,17 +319,35 @@ export class InventorySyncService {
       shop.inventoryLastSyncError = message;
       await this.shopsRepository.save(shop);
 
+      await this.registerLog({
+        shop,
+        startedAt,
+        finishedAt: new Date(),
+        triggerType,
+        status: 'error',
+        imported: 0,
+        created: 0,
+        updated: 0,
+        deactivated: 0,
+        totalInFeed: 0,
+        activeIntegratedVehicles: 0,
+        errorMessage: message,
+        metadata: {
+          inventoryFeedUrl: shop.inventoryFeedUrl,
+        },
+      });
+
       throw error;
     }
   }
 
   private registerShopCron(shop: ShopEntity) {
-    const cronExpression = shop.inventorySyncCron ?? KAFKA_MULTIMARCAS_DEFAULT_CRON;
+    const cronExpression = shop.inventorySyncCron ?? DEFAULT_INVENTORY_SYNC_CRON;
     const jobName = `inventory-sync:${shop.id}`;
 
     const job = new CronJob(cronExpression, async () => {
       try {
-        await this.syncShopInventory(shop.id);
+        await this.syncShopInventory(shop.id, { triggerType: 'cron' });
       } catch (error) {
         const message =
           error instanceof Error ? error.message : 'Erro desconhecido no cron de estoque.';
@@ -256,8 +385,9 @@ export class InventorySyncService {
     feed: ExternalInventoryFeed,
     record: ExternalVehicleRecord,
     now: Date,
+    integrationSource: string,
   ) {
-    const photoCollections = this.buildPhotoCollections(feed, record, KAFKA_MULTIMARCAS_SOURCE_NAME);
+    const photoCollections = this.buildPhotoCollections(shop, feed, record, integrationSource);
 
     entity.shopId = shop.id;
     entity.brand = this.safeString(record.marca, 80);
@@ -288,18 +418,19 @@ export class InventorySyncService {
     entity.isFirstOwner = false;
     entity.externalVehicleId = String(record.cod_veiculo);
     entity.externalImportId = this.nullableString(record.cod_importacao);
-    entity.integrationSource = KAFKA_MULTIMARCAS_SOURCE_NAME;
+    entity.integrationSource = integrationSource;
     entity.externalRaw = record as unknown as Record<string, unknown>;
     entity.sourceUpdatedAt = this.parseNullableDate(record.data_cad);
     entity.sourceLastSeenAt = now;
   }
 
   private buildPhotoCollections(
+    shop: ShopEntity,
     feed: ExternalInventoryFeed,
     record: ExternalVehicleRecord,
     integrationSource: string,
   ) {
-    const strategy = this.resolveImageStrategy(integrationSource);
+    const strategy = this.resolveImageStrategy(shop, feed);
     const originalPhotoUrls = (record.fotos ?? []).map((filename) =>
       strategy.buildOriginalUrl(feed, record, this.normalizePhotoFilename(integrationSource, filename)),
     );
@@ -313,26 +444,19 @@ export class InventorySyncService {
     };
   }
 
-  private resolveImageStrategy(integrationSource: string) {
-    if (integrationSource === KAFKA_MULTIMARCAS_SOURCE_NAME) {
-      return {
-        buildOriginalUrl: (feed: ExternalInventoryFeed, _record: ExternalVehicleRecord, filename: string) =>
-          `${KAFKA_MULTIMARCAS_IMAGE_BUCKET_BASE_URL}/${feed.cod_loja}/${filename}`,
-        buildThumbnailUrl: (feed: ExternalInventoryFeed, _record: ExternalVehicleRecord, filename: string) =>
-          `${KAFKA_MULTIMARCAS_IMAGE_BUCKET_BASE_URL}/${feed.cod_loja}/${filename}`,
-      };
-    }
-
+  private resolveImageStrategy(shop: ShopEntity, feed: ExternalInventoryFeed) {
+    const bucketBaseUrl = shop.inventoryImageBucketBaseUrl?.trim();
+    const storeCode = this.nullableString(feed.cod_loja ?? shop.inventorySourceCode ?? undefined);
     return {
-      buildOriginalUrl: (feed: ExternalInventoryFeed, _record: ExternalVehicleRecord, filename: string) =>
-        `${KAFKA_MULTIMARCAS_IMAGE_BUCKET_BASE_URL}/${feed.cod_loja}/${filename}`,
-      buildThumbnailUrl: (feed: ExternalInventoryFeed, _record: ExternalVehicleRecord, filename: string) =>
-        `${KAFKA_MULTIMARCAS_IMAGE_BUCKET_BASE_URL}/${feed.cod_loja}/${filename}`,
+      buildOriginalUrl: (_feed: ExternalInventoryFeed, _record: ExternalVehicleRecord, filename: string) =>
+        this.buildPhotoUrl(bucketBaseUrl, storeCode, filename),
+      buildThumbnailUrl: (_feed: ExternalInventoryFeed, _record: ExternalVehicleRecord, filename: string) =>
+        this.buildPhotoUrl(bucketBaseUrl, storeCode, filename),
     };
   }
 
   private normalizePhotoFilename(integrationSource: string, filename: string) {
-    if (integrationSource !== KAFKA_MULTIMARCAS_SOURCE_NAME) {
+    if (!integrationSource.toLowerCase().includes('litoralcar')) {
       return filename;
     }
 
@@ -352,6 +476,81 @@ export class InventorySyncService {
 
     const extension = extensionMatch[1];
     return trimmed.slice(0, -extension.length) + '-004' + extension;
+  }
+
+  private buildPhotoUrl(bucketBaseUrl: string | undefined, storeCode: string | null, filename: string) {
+    const trimmed = filename.trim();
+    if (!trimmed) {
+      return trimmed;
+    }
+
+    if (/^https?:\/\//i.test(trimmed)) {
+      return trimmed;
+    }
+
+    if (!bucketBaseUrl) {
+      return trimmed;
+    }
+
+    const normalizedBase = bucketBaseUrl.replace(/\/+$/, '');
+    return storeCode ? `${normalizedBase}/${storeCode}/${trimmed}` : `${normalizedBase}/${trimmed}`;
+  }
+
+  private resolveIntegrationSource(shop: ShopEntity) {
+    return (
+      this.nullableString(shop.inventorySourceName, 120) ??
+      this.nullableString(shop.inventorySourceCode, 80) ??
+      DEFAULT_INVENTORY_SOURCE_NAME
+    );
+  }
+
+  private ensureAdmin(user: JwtUser) {
+    if (!user.roles?.includes('Admin')) {
+      throw new ForbiddenException('Acesso restrito ao admin da plataforma.');
+    }
+  }
+
+  private async registerLog(params: {
+    shop: ShopEntity;
+    startedAt: Date;
+    finishedAt: Date;
+    triggerType: InventorySyncTriggerType;
+    status: 'success' | 'error';
+    imported: number;
+    created: number;
+    updated: number;
+    deactivated: number;
+    totalInFeed: number;
+    activeIntegratedVehicles: number;
+    errorMessage: string | null;
+    metadata?: Record<string, unknown>;
+  }) {
+    const durationMs = Math.max(params.finishedAt.getTime() - params.startedAt.getTime(), 0);
+
+    const log = this.inventorySyncLogRepository.create({
+      shopId: params.shop.id,
+      shopName: params.shop.name,
+      inventoryFeedUrl: params.shop.inventoryFeedUrl ?? null,
+      inventorySourceCode: params.shop.inventorySourceCode ?? null,
+      inventorySourceName: params.shop.inventorySourceName ?? null,
+      inventorySyncCron: params.shop.inventorySyncCron ?? null,
+      inventorySyncEnabled: params.shop.inventorySyncEnabled ?? false,
+      triggerType: params.triggerType,
+      status: params.status,
+      imported: params.imported,
+      created: params.created,
+      updated: params.updated,
+      deactivated: params.deactivated,
+      totalInFeed: params.totalInFeed,
+      activeIntegratedVehicles: params.activeIntegratedVehicles,
+      durationMs,
+      startedAt: params.startedAt,
+      finishedAt: params.finishedAt,
+      errorMessage: params.errorMessage,
+      metadata: params.metadata ?? {},
+    });
+
+    await this.inventorySyncLogRepository.save(log);
   }
 
   private resolvePrice(record: ExternalVehicleRecord) {

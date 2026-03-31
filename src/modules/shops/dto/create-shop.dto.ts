@@ -72,6 +72,26 @@ export class CreateShopDto {
   @IsString()
   inventorySourceCode?: string;
 
+  @ApiPropertyOptional({ example: 'kafka-litoralcar-json' })
+  @IsOptional()
+  @IsString()
+  inventorySourceName?: string;
+
+  @ApiPropertyOptional({ example: 'https://302017-litoralcar-org.s3.unifique.cloud/litoralcar' })
+  @IsOptional()
+  @IsString()
+  inventoryImageBucketBaseUrl?: string;
+
+  @ApiPropertyOptional({ format: 'uuid' })
+  @IsOptional()
+  @IsUUID()
+  inventoryMasterUserId?: string;
+
+  @ApiPropertyOptional({ format: 'uuid' })
+  @IsOptional()
+  @IsUUID()
+  inventorySellerUserId?: string;
+
   @ApiPropertyOptional({ example: '0 */6 * * *' })
   @IsOptional()
   @IsString()

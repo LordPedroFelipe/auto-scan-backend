@@ -10,6 +10,7 @@ import * as bcrypt from 'bcrypt';
 import { DataSource, Repository } from 'typeorm';
 import { EmailService } from '../email/email.service';
 import { buildWelcomeEmailTemplate } from '../email/email.templates';
+import { InventorySyncService } from '../inventory-sync/inventory-sync.service';
 import { UserEntity } from '../users/entities/user.entity';
 import { CreateShopDto } from './dto/create-shop.dto';
 import { CreateShopOnboardingDto } from './dto/create-shop-onboarding.dto';
@@ -28,6 +29,7 @@ export class ShopsService {
     private readonly dataSource: DataSource,
     private readonly emailService: EmailService,
     private readonly configService: ConfigService,
+    private readonly inventorySyncService: InventorySyncService,
   ) {}
 
   async findAll() {
@@ -62,6 +64,12 @@ export class ShopsService {
     if (dto.ownerId) {
       await this.ensureOwnerExists(dto.ownerId);
     }
+    if (dto.inventoryMasterUserId) {
+      await this.ensureUserExists(dto.inventoryMasterUserId, 'Usuario master da integracao nao encontrado.');
+    }
+    if (dto.inventorySellerUserId) {
+      await this.ensureUserExists(dto.inventorySellerUserId, 'Usuario vendedor da integracao nao encontrado.');
+    }
 
     const shop = this.shopsRepository.create({
       name: dto.name,
@@ -76,6 +84,10 @@ export class ShopsService {
       qrCodeLimit: dto.qrCodeLimit ?? 10,
       inventoryFeedUrl: dto.inventoryFeedUrl ?? null,
       inventorySourceCode: dto.inventorySourceCode ?? null,
+      inventorySourceName: dto.inventorySourceName ?? null,
+      inventoryImageBucketBaseUrl: dto.inventoryImageBucketBaseUrl ?? null,
+      inventoryMasterUserId: dto.inventoryMasterUserId ?? null,
+      inventorySellerUserId: dto.inventorySellerUserId ?? null,
       inventorySyncCron: dto.inventorySyncCron ?? null,
       inventorySyncEnabled: dto.inventorySyncEnabled ?? false,
       inventoryLastSyncAt: null,
@@ -87,6 +99,7 @@ export class ShopsService {
     });
 
     const savedShop = await this.shopsRepository.save(shop);
+    await this.inventorySyncService.initializeSchedules();
     return this.findOne(savedShop.id);
   }
 
@@ -199,6 +212,12 @@ export class ShopsService {
     if (dto.ownerId) {
       await this.ensureOwnerExists(dto.ownerId);
     }
+    if (dto.inventoryMasterUserId) {
+      await this.ensureUserExists(dto.inventoryMasterUserId, 'Usuario master da integracao nao encontrado.');
+    }
+    if (dto.inventorySellerUserId) {
+      await this.ensureUserExists(dto.inventorySellerUserId, 'Usuario vendedor da integracao nao encontrado.');
+    }
 
     shop.name = dto.name ?? shop.name;
     shop.description = dto.description ?? shop.description;
@@ -210,14 +229,35 @@ export class ShopsService {
     shop.state = dto.state ?? shop.state;
     shop.zipCode = dto.zipCode ?? shop.zipCode;
     shop.qrCodeLimit = dto.qrCodeLimit ?? shop.qrCodeLimit;
-    shop.inventoryFeedUrl = dto.inventoryFeedUrl ?? shop.inventoryFeedUrl;
-    shop.inventorySourceCode = dto.inventorySourceCode ?? shop.inventorySourceCode;
-    shop.inventorySyncCron = dto.inventorySyncCron ?? shop.inventorySyncCron;
-    shop.inventorySyncEnabled = dto.inventorySyncEnabled ?? shop.inventorySyncEnabled;
+    if ('inventoryFeedUrl' in dto) {
+      shop.inventoryFeedUrl = dto.inventoryFeedUrl ?? null;
+    }
+    if ('inventorySourceCode' in dto) {
+      shop.inventorySourceCode = dto.inventorySourceCode ?? null;
+    }
+    if ('inventorySourceName' in dto) {
+      shop.inventorySourceName = dto.inventorySourceName ?? null;
+    }
+    if ('inventoryImageBucketBaseUrl' in dto) {
+      shop.inventoryImageBucketBaseUrl = dto.inventoryImageBucketBaseUrl ?? null;
+    }
+    if ('inventoryMasterUserId' in dto) {
+      shop.inventoryMasterUserId = dto.inventoryMasterUserId ?? null;
+    }
+    if ('inventorySellerUserId' in dto) {
+      shop.inventorySellerUserId = dto.inventorySellerUserId ?? null;
+    }
+    if ('inventorySyncCron' in dto) {
+      shop.inventorySyncCron = dto.inventorySyncCron ?? null;
+    }
+    if ('inventorySyncEnabled' in dto) {
+      shop.inventorySyncEnabled = dto.inventorySyncEnabled ?? false;
+    }
     shop.ownerId = dto.ownerId ?? shop.ownerId;
     shop.isActive = dto.isActive ?? shop.isActive;
 
     await this.shopsRepository.save(shop);
+    await this.inventorySyncService.initializeSchedules();
     return this.findOne(id);
   }
 
@@ -270,6 +310,13 @@ export class ShopsService {
     const owner = await this.usersRepository.findOne({ where: { id: ownerId } });
     if (!owner) {
       throw new BadRequestException('Usuario proprietario nao encontrado.');
+    }
+  }
+
+  private async ensureUserExists(userId: string, message: string) {
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new BadRequestException(message);
     }
   }
 

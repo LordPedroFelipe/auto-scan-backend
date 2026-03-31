@@ -95,11 +95,14 @@ export class SettingsService {
   ) {}
 
   async getOverview(shopId?: string) {
-    const [shop, activePlan, paymentAggregate] = await Promise.all([
+    const [shop, paymentAggregate] = await Promise.all([
       shopId ? this.loadShop(shopId) : Promise.resolve(null),
-      this.loadActivePlan(shopId),
       this.loadPaymentAggregate(shopId),
     ]);
+    const activePlan = await this.loadActivePlan(
+      shopId,
+      paymentAggregate.currentPayment?.isCurrentCoverageValid ?? false,
+    );
 
     const provider = this.buildProviderStatus();
     const access = this.buildAccessStatus({
@@ -222,7 +225,7 @@ export class SettingsService {
     return shop;
   }
 
-  private async loadActivePlan(shopId?: string) {
+  private async loadActivePlan(shopId?: string, hasValidCoverage = false) {
     const currentPayment = shopId
       ? await this.paymentsRepository.findOne({
           where: { shopId },
@@ -242,12 +245,15 @@ export class SettingsService {
           },
         });
 
-    const subscription =
-      currentPayment?.subscription ??
-      (await this.subscriptionsRepository.findOne({
-        where: { isActive: true },
-        order: { price: 'ASC' },
-      }));
+    const subscription = shopId
+      ? hasValidCoverage
+        ? currentPayment?.subscription ?? null
+        : null
+      : currentPayment?.subscription ??
+        (await this.subscriptionsRepository.findOne({
+          where: { isActive: true },
+          order: { price: 'ASC' },
+        }));
 
     if (!subscription) {
       return null;

@@ -10,3 +10,6 @@ export const KAFKA_MULTIMARCAS_SOURCE_NAME = 'kafka-litoralcar-json';
 export const KAFKA_MULTIMARCAS_DEFAULT_CRON = '0 0 * * *';
 export const KAFKA_MULTIMARCAS_IMAGE_BUCKET_BASE_URL =
   'https://302017-litoralcar-org.s3.unifique.cloud/litoralcar';
+
+export const DEFAULT_INVENTORY_SOURCE_NAME = 'custom-feed-json';
+export const DEFAULT_INVENTORY_SYNC_CRON = '0 */6 * * *';

@@ -20,7 +20,7 @@ export class InventorySyncBootstrap implements OnModuleInit {
 
     if (runOnStartup) {
       this.logger.log('Executando sincronização automática na inicialização.');
-      await this.inventorySyncService.syncEnabledShops();
+      await this.inventorySyncService.syncEnabledShops('startup');
     }
   }
 }

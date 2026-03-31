@@ -13,12 +13,16 @@ import { SubscriptionEntity } from '../modules/subscriptions/entities/subscripti
 import { TestDriveEntity } from '../modules/test-drives/entities/test-drive.entity';
 import { UserEntity } from '../modules/users/entities/user.entity';
 import { VehicleEntity } from '../modules/vehicles/entities/vehicle.entity';
+import { InventorySyncLogEntity } from '../modules/inventory-sync/entities/inventory-sync-log.entity';
 import { KafkaBootstrap1743300000000 } from './migrations/1743300000000-KafkaBootstrap';
 import { ChatAiUpgrade1743320000000 } from './migrations/1743320000000-ChatAiUpgrade';
 import { VehiclePhotoVariants1743311000000 } from './migrations/1743311000000-VehiclePhotoVariants';
 import { PlatformAdminBootstrap1743330000000 } from './migrations/1743330000000-PlatformAdminBootstrap';
 import { ShopSettingsPreferences1743340000000 } from './migrations/1743340000000-ShopSettingsPreferences';
 import { BillingProductionReadiness1743350000000 } from './migrations/1743350000000-BillingProductionReadiness';
+import { SubscriptionCatalogBootstrap1743360000000 } from './migrations/1743360000000-SubscriptionCatalogBootstrap';
+import { ShopInventoryIntegrationSettings1743370000000 } from './migrations/1743370000000-ShopInventoryIntegrationSettings';
+import { InventorySyncLogs1743380000000 } from './migrations/1743380000000-InventorySyncLogs';
 
 export const AppDataSource = new DataSource({
   type: 'postgres',
@@ -39,6 +43,7 @@ export const AppDataSource = new DataSource({
     TestDriveEntity,
     LeadNoteEntity,
     QrCodeEntity,
+    InventorySyncLogEntity,
     SubscriptionEntity,
     SubscriptionPaymentEntity,
   ],
@@ -49,5 +54,8 @@ export const AppDataSource = new DataSource({
     PlatformAdminBootstrap1743330000000,
     ShopSettingsPreferences1743340000000,
     BillingProductionReadiness1743350000000,
+    SubscriptionCatalogBootstrap1743360000000,
+    ShopInventoryIntegrationSettings1743370000000,
+    InventorySyncLogs1743380000000,
   ],
 });

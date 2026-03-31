@@ -1,8 +1,11 @@
-﻿import {
+import {
   BadRequestException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import type { Request } from 'express';
+import { existsSync, unlinkSync } from 'fs';
+import { join } from 'path';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ShopEntity } from '../shops/entities/shop.entity';
@@ -10,6 +13,9 @@ import { CreateVehicleDto } from './dto/create-vehicle.dto';
 import { UpdateVehicleDto } from './dto/update-vehicle.dto';
 import { VehiclesQueryDto } from './dto/vehicles-query.dto';
 import { VehicleEntity } from './entities/vehicle.entity';
+
+const uploadsDirectory = join(process.cwd(), 'uploads', 'vehicles');
+type UploadedVehicleFile = { filename: string };
 
 @Injectable()
 export class VehiclesService {
@@ -238,10 +244,17 @@ export class VehiclesService {
     return this.toResponse(vehicle);
   }
 
-  async create(dto: CreateVehicleDto) {
+  async create(
+    dto: CreateVehicleDto,
+    files: UploadedVehicleFile[] = [],
+    request?: Request,
+  ) {
     await this.ensureShopExists(dto.shopId);
 
-    const normalizedPhotos = this.normalizePhotoCollections(dto.photoUrls ?? []);
+    const normalizedPhotos = this.normalizePhotoCollections(
+      dto.retainedPhotoUrls ?? dto.photoUrls ?? [],
+      files,
+    );
 
     const vehicle = this.vehiclesRepository.create({
       ...dto,
@@ -270,33 +283,68 @@ export class VehiclesService {
     });
 
     const savedVehicle = await this.vehiclesRepository.save(vehicle);
-    return this.findOne(savedVehicle.id);
+    return this.findOneWithRequest(savedVehicle.id, request);
   }
 
-  async update(id: string, dto: UpdateVehicleDto) {
-    const vehicle = await this.findOne(id);
+  async update(
+    id: string,
+    dto: UpdateVehicleDto,
+    files: UploadedVehicleFile[] = [],
+    request?: Request,
+  ) {
+    const vehicle = await this.vehiclesRepository.findOne({
+      where: { id },
+      relations: {
+        shop: true,
+      },
+    });
+
+    if (!vehicle) {
+      throw new NotFoundException('Veículo não encontrado.');
+    }
 
     if (dto.shopId && dto.shopId !== vehicle.shopId) {
       await this.ensureShopExists(dto.shopId);
     }
 
+    const previousPhotoUrls = [...(vehicle.originalPhotoUrls ?? vehicle.photoUrls ?? [])];
+
     Object.assign(vehicle, dto);
 
-    if (dto.photoUrls) {
-      const normalizedPhotos = this.normalizePhotoCollections(dto.photoUrls);
+    if (dto.photoUrls || dto.retainedPhotoUrls || files.length) {
+      const normalizedPhotos = this.normalizePhotoCollections(
+        dto.retainedPhotoUrls ?? dto.photoUrls ?? previousPhotoUrls,
+        files,
+      );
       Object.assign(vehicle, {
         photoUrls: normalizedPhotos.originalPhotoUrls,
         originalPhotoUrls: normalizedPhotos.originalPhotoUrls,
         thumbnailPhotoUrls: normalizedPhotos.thumbnailPhotoUrls,
       });
+
+      const keptUrls = new Set(normalizedPhotos.originalPhotoUrls);
+      this.removeLocalPhotos(
+        previousPhotoUrls.filter((url) => !keptUrls.has(url)),
+      );
     }
 
     const savedVehicle = await this.vehiclesRepository.save(vehicle);
-    return this.findOne(savedVehicle.id);
+    return this.findOneWithRequest(savedVehicle.id, request);
   }
 
   async remove(id: string) {
-    const vehicle = await this.findOne(id);
+    const vehicle = await this.vehiclesRepository.findOne({
+      where: { id },
+      relations: {
+        shop: true,
+      },
+    });
+
+    if (!vehicle) {
+      throw new NotFoundException('Veículo não encontrado.');
+    }
+
+    this.removeLocalPhotos(vehicle.originalPhotoUrls ?? vehicle.photoUrls ?? []);
     await this.vehiclesRepository.remove(vehicle);
     return { success: true };
   }
@@ -308,9 +356,30 @@ export class VehiclesService {
     }
   }
 
-  private normalizePhotoCollections(photoUrls: string[]) {
-    const originalPhotoUrls = [...photoUrls];
-    const thumbnailPhotoUrls = [...photoUrls];
+  private async findOneWithRequest(id: string, request?: Request) {
+    const vehicle = await this.vehiclesRepository.findOne({
+      where: { id },
+      relations: {
+        shop: true,
+      },
+    });
+
+    if (!vehicle) {
+      throw new NotFoundException('Veículo não encontrado.');
+    }
+
+    return this.toResponse(vehicle, request);
+  }
+
+  private normalizePhotoCollections(
+    photoUrls: string[],
+    uploadedFiles: UploadedVehicleFile[] = [],
+  ) {
+    const uploadedPhotoUrls = uploadedFiles.map(
+      (file) => `/uploads/vehicles/${file.filename}`,
+    );
+    const originalPhotoUrls = [...photoUrls, ...uploadedPhotoUrls];
+    const thumbnailPhotoUrls = [...photoUrls, ...uploadedPhotoUrls];
 
     return {
       originalPhotoUrls,
@@ -318,21 +387,64 @@ export class VehiclesService {
     };
   }
 
-  private toResponse(vehicle: VehicleEntity) {
+  private removeLocalPhotos(photoUrls: string[]) {
+    for (const url of photoUrls) {
+      const filePath = this.resolveLocalUploadPath(url);
+      if (filePath && existsSync(filePath)) {
+        unlinkSync(filePath);
+      }
+    }
+  }
+
+  private resolveLocalUploadPath(url: string) {
+    if (!url.startsWith('/uploads/vehicles/')) {
+      return null;
+    }
+
+    const filename = url.replace('/uploads/vehicles/', '');
+    if (!filename || filename.includes('..')) {
+      return null;
+    }
+
+    return join(uploadsDirectory, filename);
+  }
+
+  private normalizePublicUrl(url: string, request?: Request) {
+    if (!url.startsWith('/uploads/')) {
+      return url;
+    }
+
+    if (!request) {
+      return url;
+    }
+
+    return `${request.protocol}://${request.get('host')}${url}`;
+  }
+
+  private toResponse(vehicle: VehicleEntity, request?: Request) {
     const originalPhotoUrls = vehicle.originalPhotoUrls?.length
       ? vehicle.originalPhotoUrls
       : vehicle.photoUrls ?? [];
     const thumbnailPhotoUrls = vehicle.thumbnailPhotoUrls?.length
       ? vehicle.thumbnailPhotoUrls
       : vehicle.photoUrls ?? [];
-    const mainPhotoUrl = thumbnailPhotoUrls[0] ?? originalPhotoUrls[0] ?? null;
-    const originalMainPhotoUrl = originalPhotoUrls[0] ?? null;
+    const normalizedOriginalPhotoUrls = originalPhotoUrls.map((url) =>
+      this.normalizePublicUrl(url, request),
+    );
+    const normalizedThumbnailPhotoUrls = thumbnailPhotoUrls.map((url) =>
+      this.normalizePublicUrl(url, request),
+    );
+    const mainPhotoUrl =
+      normalizedThumbnailPhotoUrls[0] ?? normalizedOriginalPhotoUrls[0] ?? null;
+    const originalMainPhotoUrl = normalizedOriginalPhotoUrls[0] ?? null;
 
     return {
       ...vehicle,
-      photoUrls: originalPhotoUrls,
-      originalPhotoUrls,
-      thumbnailPhotoUrls,
+      shopName: vehicle.shop?.name ?? null,
+      licensePlate: vehicle.plate ?? null,
+      photoUrls: normalizedOriginalPhotoUrls,
+      originalPhotoUrls: normalizedOriginalPhotoUrls,
+      thumbnailPhotoUrls: normalizedThumbnailPhotoUrls,
       mainPhotoUrl,
       originalMainPhotoUrl,
       price: Number(vehicle.price),

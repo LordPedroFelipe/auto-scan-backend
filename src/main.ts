@@ -2,14 +2,21 @@ import 'reflect-metadata';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import * as express from 'express';
+import { mkdirSync } from 'fs';
+import { join } from 'path';
 import { GlobalExceptionFilter } from './common/http/global-exception.filter';
 import { AppModule } from './app.module';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
+  const uploadsPath = join(process.cwd(), 'uploads');
+
+  mkdirSync(join(uploadsPath, 'vehicles'), { recursive: true });
 
   app.setGlobalPrefix('api');
   app.enableCors();
+  app.use('/uploads', express.static(uploadsPath));
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

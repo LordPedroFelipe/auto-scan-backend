@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsIn, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsArray, IsBoolean, IsIn, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 
 export class CreateSubscriptionDto {
   @ApiProperty({ example: 'Plano Premium' })
@@ -10,6 +10,16 @@ export class CreateSubscriptionDto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  @ApiPropertyOptional({ example: 'plano-start' })
+  @IsOptional()
+  @IsString()
+  slug?: string;
+
+  @ApiPropertyOptional({ example: 'START_399' })
+  @IsOptional()
+  @IsString()
+  code?: string;
 
   @ApiProperty({ example: 799, minimum: 0 })
   @IsNumber()
@@ -30,6 +40,35 @@ export class CreateSubscriptionDto {
   @IsString()
   @IsIn(['Monthly', 'Yearly'])
   type!: 'Monthly' | 'Yearly';
+
+  @ApiPropertyOptional({
+    example: ['Cadastro de até 20 veículos', 'IA comercial inicial', 'Agendamento de test drive'],
+    type: [String],
+  })
+  @IsOptional()
+  @IsArray()
+  benefits?: string[];
+
+  @ApiPropertyOptional({ example: 'Mais vendido' })
+  @IsOptional()
+  @IsString()
+  marketingBadge?: string;
+
+  @ApiPropertyOptional({ example: 10, minimum: 0 })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  displayOrder?: number;
+
+  @ApiPropertyOptional({ example: true })
+  @IsOptional()
+  @IsBoolean()
+  isFeatured?: boolean;
+
+  @ApiPropertyOptional({ example: false })
+  @IsOptional()
+  @IsBoolean()
+  isPromotional?: boolean;
 
   @ApiPropertyOptional({ example: true })
   @IsOptional()

@@ -53,6 +53,18 @@ export class ShopEntity {
   inventorySourceCode!: string | null;
 
   @Column({ type: 'varchar', nullable: true, length: 120 })
+  inventorySourceName!: string | null;
+
+  @Column({ type: 'varchar', nullable: true, length: 500 })
+  inventoryImageBucketBaseUrl!: string | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  inventoryMasterUserId!: string | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  inventorySellerUserId!: string | null;
+
+  @Column({ type: 'varchar', nullable: true, length: 120 })
   inventorySyncCron!: string | null;
 
   @Column({ default: false })

@@ -13,6 +13,7 @@ import { UserEntity } from '../users/entities/user.entity';
 import { AsaasBillingService } from './asaas-billing.service';
 import { AsaasWebhookDto } from './dto/asaas-webhook.dto';
 import {
+  BillingCycle,
   CreateBillingCheckoutDto,
 } from './dto/create-billing-checkout.dto';
 import { CreateSubscriptionPaymentDto } from './dto/create-subscription-payment.dto';
@@ -185,16 +186,17 @@ export class SubscriptionsService {
       await this.shopsRepository.save(shop);
     }
 
+    const billingTerms = this.resolveBillingTerms(subscription, dto.billingCycle);
     const startDate = new Date();
     const endDate = new Date(startDate);
-    endDate.setDate(endDate.getDate() + Number(subscription.durationInDays || 30));
+    endDate.setDate(endDate.getDate() + billingTerms.durationInDays);
 
     const localPayment = await this.paymentsRepository.save(
       this.paymentsRepository.create({
         subscriptionId: subscription.id,
         shopId: shop.id,
         userId: null,
-        amount: Number(subscription.price),
+        amount: billingTerms.amount,
         startDate,
         endDate,
         dueDate: dto.dueDate ? new Date(dto.dueDate) : startDate,
@@ -214,10 +216,12 @@ export class SubscriptionsService {
 
     const providerPayment = await this.asaasBillingService.createSubscriptionCharge({
       customerId: customer.customerId,
-      amount: Number(subscription.price),
+      amount: billingTerms.amount,
       billingType: dto.paymentMethod,
       dueDate: dto.dueDate ?? this.toDateOnly(startDate),
-      description: dto.description ?? `Assinatura ${subscription.name} - ${shop.name}`,
+      description:
+        dto.description ??
+        `Assinatura ${subscription.name} ${billingTerms.label} - ${shop.name}`,
       externalReference:
         localPayment.externalReference ?? `subscription-payment:${localPayment.id}`,
     });
@@ -232,6 +236,10 @@ export class SubscriptionsService {
         pixQrCode: updated.pixQrCode,
         pixCopyPaste: updated.pixCopyPaste,
         dueDate: updated.dueDate,
+        billingCycle: billingTerms.billingCycle,
+        amount: billingTerms.amount,
+        installmentAmount: billingTerms.installmentAmount,
+        durationInDays: billingTerms.durationInDays,
       },
     };
   }
@@ -404,6 +412,50 @@ export class SubscriptionsService {
     };
 
     return providerMap[normalized] ?? normalized;
+  }
+
+  private resolveBillingTerms(
+    subscription: SubscriptionEntity,
+    requestedCycle?: BillingCycle,
+  ) {
+    const baseCycle: BillingCycle =
+      subscription.type === 'Yearly' ? BillingCycle.Yearly : BillingCycle.Monthly;
+    const billingCycle = requestedCycle ?? baseCycle;
+    const rawPrice = Number(subscription.price);
+    const baseDuration = Number(
+      subscription.durationInDays || (baseCycle === BillingCycle.Yearly ? 365 : 30),
+    );
+
+    if (billingCycle === baseCycle) {
+      return {
+        billingCycle,
+        amount: rawPrice,
+        durationInDays: baseDuration,
+        installmentAmount:
+          billingCycle === BillingCycle.Yearly
+            ? Number((rawPrice / 12).toFixed(2))
+            : rawPrice,
+        label: billingCycle === BillingCycle.Yearly ? 'anual' : 'mensal',
+      };
+    }
+
+    if (billingCycle === BillingCycle.Yearly) {
+      return {
+        billingCycle,
+        amount: Number((rawPrice * 12).toFixed(2)),
+        durationInDays: Math.max(baseDuration * 12, 365),
+        installmentAmount: rawPrice,
+        label: 'anual',
+      };
+    }
+
+    return {
+      billingCycle,
+      amount: Number((rawPrice / 12).toFixed(2)),
+      durationInDays: Math.max(Math.round(baseDuration / 12), 30),
+      installmentAmount: Number((rawPrice / 12).toFixed(2)),
+      label: 'mensal',
+    };
   }
 
   private async applyProviderPaymentToLocal(

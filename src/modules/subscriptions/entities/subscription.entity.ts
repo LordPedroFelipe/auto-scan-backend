@@ -16,6 +16,12 @@ export class SubscriptionEntity {
   @Column({ length: 120 })
   name!: string;
 
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  slug!: string | null;
+
+  @Column({ type: 'varchar', length: 60, nullable: true })
+  code!: string | null;
+
   @Column({ type: 'text', nullable: true })
   description!: string | null;
 
@@ -30,6 +36,21 @@ export class SubscriptionEntity {
 
   @Column({ type: 'varchar', length: 20, default: 'Monthly' })
   type!: SubscriptionType;
+
+  @Column({ type: 'jsonb', default: () => "'[]'" })
+  benefits!: string[];
+
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  marketingBadge!: string | null;
+
+  @Column({ type: 'int', default: 0 })
+  displayOrder!: number;
+
+  @Column({ default: false })
+  isFeatured!: boolean;
+
+  @Column({ default: false })
+  isPromotional!: boolean;
 
   @Column({ default: true })
   isActive!: boolean;
