@@ -60,6 +60,9 @@ export class LeadEntity {
   @Column({ type: 'varchar', nullable: true, length: 120 })
   city!: string | null;
 
+  @Column({ type: 'varchar', nullable: true, length: 120 })
+  origin!: string | null;
+
   @Column({
     type: 'enum',
     enum: LeadStatus,

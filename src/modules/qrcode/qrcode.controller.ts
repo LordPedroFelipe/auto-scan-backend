@@ -24,6 +24,27 @@ export class QrCodeController {
     return this.qrCodeService.findAll({ ...query, shopId });
   }
 
+  @ApiOperation({ summary: 'Obter ou criar QR Code de um veiculo e renderizar SVG' })
+  @Get('vehicle/:vehicleId')
+  findByVehicle(
+    @Param('vehicleId', new ParseUUIDPipe()) vehicleId: string,
+    @Query('shopId', new ParseUUIDPipe()) shopId: string,
+    @Query('vehiclePlate') vehiclePlate?: string,
+  ) {
+    return this.qrCodeService.getVehicleQrDetails(shopId, vehicleId, vehiclePlate);
+  }
+
+  @ApiOperation({ summary: 'Obter ou criar QR Code de um veiculo e renderizar SVG' })
+  @Get('vehicle/:vehicleId/image')
+  @Header('Content-Type', 'image/svg+xml')
+  async imageByVehicle(
+    @Param('vehicleId', new ParseUUIDPipe()) vehicleId: string,
+    @Query('shopId', new ParseUUIDPipe()) shopId: string,
+    @Query('vehiclePlate') vehiclePlate?: string,
+  ) {
+    return this.qrCodeService.renderVehicleSvg(shopId, vehicleId, vehiclePlate);
+  }
+
   @ApiOperation({ summary: 'Criar QR Code para uma loja' })
   @Post('shop/:shopId')
   create(

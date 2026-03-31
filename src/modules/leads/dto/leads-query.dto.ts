@@ -35,6 +35,10 @@ export class LeadsQueryDto {
   @IsString()
   CustomerCity?: string;
 
+  @IsOptional()
+  @IsString()
+  Origin?: string;
+
   @ApiPropertyOptional({ example: 'New' })
   @IsOptional()
   @IsString()

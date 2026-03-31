@@ -44,6 +44,7 @@ export class LeadsService {
     if (query.CustomerEmail) qb.andWhere('lead.email ILIKE :email', { email: `%${query.CustomerEmail}%` });
     if (query.CustomerPhone) qb.andWhere('lead.phone ILIKE :phone', { phone: `%${query.CustomerPhone}%` });
     if (query.CustomerCity) qb.andWhere('lead.city ILIKE :city', { city: `%${query.CustomerCity}%` });
+    if (query.Origin) qb.andWhere('lead.origin ILIKE :origin', { origin: `%${query.Origin}%` });
     if (query.Status) qb.andWhere('lead.status = :status', { status: query.Status });
     if (query.SellerId) qb.andWhere('lead.sellerId = :sellerId', { sellerId: query.SellerId });
 
@@ -114,6 +115,7 @@ export class LeadsService {
       ...dto,
       email: dto.email?.toLowerCase() ?? null,
       city: dto.city ?? null,
+      origin: dto.origin?.trim() ?? null,
       notes: dto.notes ?? null,
       status: dto.status ?? LeadStatus.New,
       hasBeenContacted: dto.hasBeenContacted ?? false,
@@ -141,6 +143,7 @@ export class LeadsService {
     if (dto.contactDate) lead.contactDate = new Date(dto.contactDate);
     if (dto.lastContactDate) lead.lastContactDate = new Date(dto.lastContactDate);
     if (dto.email) lead.email = dto.email.toLowerCase();
+    if (dto.origin !== undefined) lead.origin = dto.origin?.trim() ?? null;
     lead.shopId = shopId;
     lead.vehicleId = vehicleId;
 

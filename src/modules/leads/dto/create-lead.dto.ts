@@ -29,6 +29,11 @@ export class CreateLeadDto {
   @IsString()
   city?: string;
 
+  @ApiPropertyOptional({ example: 'WhatsApp' })
+  @IsOptional()
+  @IsString()
+  origin?: string;
+
   @ApiPropertyOptional({ example: 'Cliente pediu retorno via WhatsApp.' })
   @IsOptional()
   @IsString()

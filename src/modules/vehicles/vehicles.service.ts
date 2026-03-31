@@ -9,6 +9,7 @@ import { join } from 'path';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ShopEntity } from '../shops/entities/shop.entity';
+import { QrCodeService } from '../qrcode/qrcode.service';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
 import { UpdateVehicleDto } from './dto/update-vehicle.dto';
 import { VehiclesQueryDto } from './dto/vehicles-query.dto';
@@ -24,6 +25,7 @@ export class VehiclesService {
     private readonly vehiclesRepository: Repository<VehicleEntity>,
     @InjectRepository(ShopEntity)
     private readonly shopsRepository: Repository<ShopEntity>,
+    private readonly qrCodeService: QrCodeService,
   ) {}
 
   async findAll(query: VehiclesQueryDto) {
@@ -195,9 +197,10 @@ export class VehiclesService {
     qb.take(pageSize);
 
     const [items, totalCount] = await qb.getManyAndCount();
+    const qrMap = await this.qrCodeService.getVehicleQrMap(items.map((item) => item.id));
 
     return {
-      items: items.map((item) => this.toResponse(item)),
+      items: items.map((item) => this.toResponse(item, undefined, qrMap.has(item.id))),
       pageNumber,
       pageSize,
       totalCount,
@@ -241,7 +244,8 @@ export class VehiclesService {
       throw new NotFoundException('Veículo não encontrado.');
     }
 
-    return this.toResponse(vehicle);
+    const hasQrCode = !!(await this.qrCodeService.getVehicleQrMap([vehicle.id])).get(vehicle.id);
+    return this.toResponse(vehicle, undefined, hasQrCode);
   }
 
   async create(
@@ -283,6 +287,7 @@ export class VehiclesService {
     });
 
     const savedVehicle = await this.vehiclesRepository.save(vehicle);
+    await this.qrCodeService.ensureVehicleQrCode(savedVehicle.shopId, savedVehicle.id, savedVehicle.plate);
     return this.findOneWithRequest(savedVehicle.id, request);
   }
 
@@ -329,6 +334,7 @@ export class VehiclesService {
     }
 
     const savedVehicle = await this.vehiclesRepository.save(vehicle);
+    await this.qrCodeService.ensureVehicleQrCode(savedVehicle.shopId, savedVehicle.id, savedVehicle.plate);
     return this.findOneWithRequest(savedVehicle.id, request);
   }
 
@@ -368,7 +374,8 @@ export class VehiclesService {
       throw new NotFoundException('Veículo não encontrado.');
     }
 
-    return this.toResponse(vehicle, request);
+    const hasQrCode = !!(await this.qrCodeService.getVehicleQrMap([vehicle.id])).get(vehicle.id);
+    return this.toResponse(vehicle, request, hasQrCode);
   }
 
   private normalizePhotoCollections(
@@ -421,7 +428,7 @@ export class VehiclesService {
     return `${request.protocol}://${request.get('host')}${url}`;
   }
 
-  private toResponse(vehicle: VehicleEntity, request?: Request) {
+  private toResponse(vehicle: VehicleEntity, request?: Request, hasQrCode?: boolean) {
     const originalPhotoUrls = vehicle.originalPhotoUrls?.length
       ? vehicle.originalPhotoUrls
       : vehicle.photoUrls ?? [];
@@ -450,6 +457,13 @@ export class VehiclesService {
       price: Number(vehicle.price),
       mileage: vehicle.mileage === null ? null : Number(vehicle.mileage),
       ownersCount: vehicle.ownersCount === null ? null : Number(vehicle.ownersCount),
+      hasQrCode: hasQrCode ?? false,
     };
   }
 }
+
+
+
+
+
+

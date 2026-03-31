@@ -1,29 +1,6 @@
 # Backend Auto Scan
 
-Backend em NestJS + TypeORM + PostgreSQL para o projeto Auto Scan.
-
-## Portal de documentacao
-
-O backend agora possui um portal de documentacao em Docusaurus dentro de [docs-site](../auto-scan/backend/docs-site).
-
-Scripts principais:
-
-- `npm run docs:install`
-- `npm run docs:dev`
-- `npm run docs:build`
-- `npm run docs:serve`
-
-## Stack
-
-- NestJS
-- TypeORM
-- PostgreSQL
-- JWT
-- class-validator
-- @nestjs/schedule
-- OpenAI SDK
-- Swagger/OpenAPI
-- Docker Compose
+Backend NestJS + TypeORM + PostgreSQL para a operacao do Auto Scan.
 
 ## Modulos atuais
 
@@ -36,39 +13,31 @@ Scripts principais:
 - `LeadNotes`
 - `TestDrives`
 - `QrCode`
-- `Reports`
-- `Subscriptions`
+- `Sales`
+- `Dashboard`
 - `InventorySync`
 - `Chat`
 - `Email`
 - `Settings`
+- `Subscriptions`
+- `Reports`
 
-## Como rodar com Docker
+## Estado atual
 
-```bash
-cd backend
-docker compose up --build
-```
+O backend hoje ja cobre:
 
-Servicos locais:
+- autenticacao JWT
+- operacao multi-loja
+- estoque com sincronizacao externa
+- QR automatico por veiculo
+- CRM de leads
+- test drives
+- fechamento comercial de venda e nao venda
+- dashboards por papel
+- origem do lead
+- logs e status de integracao
 
-- API: `http://localhost:3000/api`
-- Swagger: `http://localhost:3000/api/docs`
-- PostgreSQL: `localhost:5433`
-
-Parar stack:
-
-```bash
-docker compose down
-```
-
-Apagar volumes do banco:
-
-```bash
-docker compose down -v
-```
-
-## Como rodar localmente sem Docker
+## Como rodar
 
 ```bash
 cd backend
@@ -77,108 +46,83 @@ npm run migration:run
 npm run start:dev
 ```
 
-Opcional:
+## Endpoints principais
 
-```bash
-npm run seed
-```
+### Dashboard
 
-## Scripts principais
+- `GET /Dashboard/home`
+- `GET /Dashboard/system`
+- `GET /Dashboard/shop`
+- `GET /Dashboard/seller`
 
-- `npm run build`
-- `npm run lint`
-- `npm run migration:run`
-- `npm run seed`
-- `npm run inventory:sync`
-- `npm run wait:db`
-- `npm run docker:up`
-- `npm run docker:down`
-- `npm run docker:down:volumes`
-- `npm run docs:install`
-- `npm run docs:dev`
-- `npm run docs:build`
-- `npm run docs:serve`
+### Leads
 
-## Documentacao do backend
+- `GET /Lead`
+- `GET /Lead/:id`
+- `POST /Lead`
+- `PUT /Lead/:id`
+- `DELETE /Lead/:id`
+- `GET /Lead/status`
 
-O conteudo principal foi reorganizado no Docusaurus com trilhas para:
+### Sales
 
-- visao geral e getting started
-- arquitetura por dominio
-- operacao e ambientes
-- integracoes de estoque, IA, cobranca e comunicacao
-- Swagger e contratos da API
+- `GET /Sales`
+- `GET /Sales/options`
+- `GET /Sales/:id`
+- `POST /Sales`
+- `PUT /Sales/:id`
+- `DELETE /Sales/:id`
 
-Documentos-base mantidos no repositorio:
+### QRCode
 
-- [AI_CHAT_ARCHITECTURE.md](../auto-scan/backend/AI_CHAT_ARCHITECTURE.md)
-- [ARQUITETURA_BACKEND.md](../auto-scan/backend/ARQUITETURA_BACKEND.md)
-- [OPERACAO_E_AMBIENTES.md](../auto-scan/backend/OPERACAO_E_AMBIENTES.md)
-- [INTEGRACAO_ESTOQUE_E_OPERACAO.md](../auto-scan/backend/INTEGRACAO_ESTOQUE_E_OPERACAO.md)
+- `GET /QRCode`
+- `GET /QRCode/shop/:shopId`
+- `GET /QRCode/vehicle/:vehicleId`
+- `GET /QRCode/vehicle/:vehicleId/image`
+- `GET /QRCode/:id/image`
+- `POST /QRCode/shop/:shopId`
 
-## Variaveis de ambiente
+## Migrations relevantes
 
-Arquivo base:
+- integracao por loja
+- logs de sincronizacao
+- configuracao de request de feed
+- fechamento de vendas
+- origem do lead
 
-- [backend/.env.example](../auto-scan/backend/.env.example)
+## Destaques de negocio
 
-Campos atuais:
+### Integracao de estoque
 
-- `PORT`
-- `DB_HOST`
-- `DB_PORT`
-- `DB_USERNAME`
-- `DB_PASSWORD`
-- `DB_DATABASE`
-- `JWT_SECRET`
-- `JWT_EXPIRES_IN`
-- `INVENTORY_SYNC_RUN_ON_STARTUP`
-- `DB_WAIT_MAX_ATTEMPTS`
-- `DB_WAIT_DELAY_MS`
-- `OPENAI_API_KEY`
-- `OPENAI_MODEL`
-- `FRONTEND_BASE_URL`
-- `MAIL_FROM_NAME`
-- `MAIL_FROM_EMAIL`
-- `SMTP_HOST`
-- `SMTP_PORT`
-- `SMTP_SECURE`
-- `SMTP_USER`
-- `SMTP_PASS`
-- `ASAAS_API_KEY`
-- `ASAAS_ENV`
-- `ASAAS_BASE_URL`
-- `ASAAS_WEBHOOK_URL`
-- `ASAAS_WALLET_ID`
-- `ASAAS_WEBHOOK_TOKEN`
-- `ASAAS_TIMEOUT_MS`
+- feed por loja com `GET` ou `POST`
+- headers e body configuraveis
+- base de imagem configuravel
+- suporte a feeds com retorno inconsistente
+- caso real da Mazzocatto tratado
 
-## Integracao de estoque
+### QR Code
 
-O backend ja possui integracao real de estoque por loja com:
+- criado automaticamente na integracao
+- criado automaticamente no cadastro manual
+- criado automaticamente na edicao do veiculo
+- acessivel por endpoint de veiculo
 
-- feed externo por loja
-- cron por loja
-- sincronizacao manual
-- status da ultima integracao
-- desativacao logica de itens que saem do feed
+### Sales
 
-Documento principal:
+- lead encerrado como `Sale` ou `NoSale`
+- lead atualizado para `Won` ou `Lost`
+- suporte a dados financeiros e comerciais completos
 
-- [INTEGRACAO_ESTOQUE_E_OPERACAO.md](../auto-scan/backend/INTEGRACAO_ESTOQUE_E_OPERACAO.md)
+### Dashboard
 
-## Chat IA
+- `system-admin`: saude, integracoes, SLA, rankings, vendas por loja
+- `shop-admin`: operacao da loja, filtros comerciais, vendas por vendedor
+- `seller`: tarefas, agenda, metas e resultados pessoais
 
-O backend ja possui uma base real de vendedor digital com:
+## Melhorias recomendadas agora
 
-- persistencia de sessoes e mensagens
-- streaming SSE
-- recomendacao de veiculos reais
-- criacao automatica de lead
-- handoff para vendedor
-- simulacao inicial de financiamento
-- observabilidade da IA
-
-Documento principal:
-
-- [AI_CHAT_ARCHITECTURE.md](../auto-scan/backend/AI_CHAT_ARCHITECTURE.md)
+1. auditoria de acoes criticas
+2. historico de mudanca de status de lead
+3. detalhe executivo de venda com trilha completa
+4. webhooks e cobranca mais maduros
+5. relatorios institucionais no backend

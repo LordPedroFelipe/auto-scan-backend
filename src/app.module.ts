@@ -4,6 +4,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from './modules/auth/auth.module';
 import { ChatModule } from './modules/chat/chat.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { EmailModule } from './modules/email/email.module';
 import { InventorySyncModule } from './modules/inventory-sync/inventory-sync.module';
 import { LeadNotesModule } from './modules/lead-notes/lead-notes.module';
@@ -12,6 +13,7 @@ import { PermissionsModule } from './modules/permissions/permissions.module';
 import { QrCodeModule } from './modules/qrcode/qrcode.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { SettingsModule } from './modules/settings/settings.module';
+import { SalesModule } from './modules/sales/sales.module';
 import { ShopsModule } from './modules/shops/shops.module';
 import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
 import { TestDrivesModule } from './modules/test-drives/test-drives.module';
@@ -40,6 +42,7 @@ import { VehiclesModule } from './modules/vehicles/vehicles.module';
     }),
     AuthModule,
     ChatModule,
+    DashboardModule,
     EmailModule,
     InventorySyncModule,
     LeadNotesModule,
@@ -47,6 +50,7 @@ import { VehiclesModule } from './modules/vehicles/vehicles.module';
     QrCodeModule,
     ReportsModule,
     SettingsModule,
+    SalesModule,
     UsersModule,
     ShopsModule,
     SubscriptionsModule,
@@ -56,3 +60,4 @@ import { VehiclesModule } from './modules/vehicles/vehicles.module';
   ],
 })
 export class AppModule {}
+

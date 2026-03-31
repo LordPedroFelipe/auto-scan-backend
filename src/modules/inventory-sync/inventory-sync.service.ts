@@ -4,6 +4,7 @@ import { CronJob } from 'cron';
 import { SchedulerRegistry } from '@nestjs/schedule';
 import { Repository } from 'typeorm';
 import { JwtUser } from '../auth/jwt-user.interface';
+import { QrCodeService } from '../qrcode/qrcode.service';
 import { ShopEntity } from '../shops/entities/shop.entity';
 import { VehicleEntity } from '../vehicles/entities/vehicle.entity';
 import { InventorySyncLogsQueryDto } from './dto/inventory-sync-logs-query.dto';
@@ -33,6 +34,7 @@ export class InventorySyncService {
     @InjectRepository(InventorySyncLogEntity)
     private readonly inventorySyncLogRepository: Repository<InventorySyncLogEntity>,
     private readonly schedulerRegistry: SchedulerRegistry,
+    private readonly qrCodeService: QrCodeService,
   ) {}
 
   async initializeSchedules() {
@@ -82,6 +84,7 @@ export class InventorySyncService {
         id: true,
         name: true,
         inventoryFeedUrl: true,
+        inventoryFeedMethod: true,
         inventorySourceCode: true,
         inventorySyncCron: true,
         inventorySyncEnabled: true,
@@ -107,6 +110,7 @@ export class InventorySyncService {
       shopId: shop.id,
       shopName: shop.name,
       inventoryFeedUrl: shop.inventoryFeedUrl,
+      inventoryFeedMethod: shop.inventoryFeedMethod ?? 'GET',
       inventorySourceCode: shop.inventorySourceCode,
       inventorySyncCron: shop.inventorySyncCron ?? DEFAULT_INVENTORY_SYNC_CRON,
       inventorySyncEnabled: shop.inventorySyncEnabled,
@@ -213,7 +217,7 @@ export class InventorySyncService {
       }
 
       const integrationSource = this.resolveIntegrationSource(shop);
-      const feed = await this.fetchFeed(feedUrl);
+      const feed = await this.fetchFeed(shop);
       const now = new Date();
       const activeRecords = (feed.veiculos ?? []).filter(
         (record) => record.situacao === '1' && !!record.cod_veiculo,
@@ -253,7 +257,10 @@ export class InventorySyncService {
       }
 
       if (vehiclesToSave.length > 0) {
-        await this.vehiclesRepository.save(vehiclesToSave);
+        const savedVehicles = await this.vehiclesRepository.save(vehiclesToSave);
+        await Promise.all(
+          savedVehicles.map((vehicle) => this.qrCodeService.ensureVehicleQrCode(vehicle.shopId, vehicle.id, vehicle.plate)),
+        );
       }
 
       const vehiclesToDeactivate = existingVehicles.filter(
@@ -307,6 +314,7 @@ export class InventorySyncService {
         metadata: {
           integrationSource,
           feedStoreCode: feed.cod_loja,
+          inventoryFeedMethod: shop.inventoryFeedMethod ?? 'GET',
         },
       });
 
@@ -334,6 +342,7 @@ export class InventorySyncService {
         errorMessage: message,
         metadata: {
           inventoryFeedUrl: shop.inventoryFeedUrl,
+          inventoryFeedMethod: shop.inventoryFeedMethod ?? 'GET',
         },
       });
 
@@ -360,25 +369,157 @@ export class InventorySyncService {
     this.logger.log(`Cron de estoque registrado para ${shop.name}: ${cronExpression}`);
   }
 
-  private async fetchFeed(feedUrl: string): Promise<ExternalInventoryFeed> {
-    const response = await fetch(feedUrl, {
-      headers: {
-        Accept: 'application/json',
-      },
-    });
+  private async fetchFeed(shop: ShopEntity): Promise<ExternalInventoryFeed> {
+    const feedUrl = shop.inventoryFeedUrl?.trim();
+    if (!feedUrl) {
+      throw new Error('URL do feed nao configurada para esta loja.');
+    }
+
+    const method = this.resolveFeedMethod(shop.inventoryFeedMethod);
+    const headers = this.resolveFeedHeaders(shop.inventoryRequestHeaders);
+    if (!headers.has('Accept')) {
+      headers.set('Accept', 'application/json');
+    }
+
+    if (method === 'POST') {
+      const cookieHeader = await this.resolveWarmupCookies(feedUrl, headers);
+      if (cookieHeader) {
+        headers.set('Cookie', cookieHeader);
+      }
+    }
+
+    const requestInit: RequestInit = {
+      method,
+      headers,
+    };
+
+    const body = this.resolveFeedBody(shop.inventoryRequestBody, headers);
+    if (body !== undefined && method !== 'GET') {
+      requestInit.body = body;
+    }
+
+    const response = await fetch(feedUrl, requestInit);
 
     if (!response.ok) {
       throw new Error(`Falha ao buscar feed ${feedUrl}: ${response.status}`);
     }
 
-    const payload = (await response.json()) as ExternalInventoryFeed;
+    const rawPayload = await response.text();
+    let payload: ExternalInventoryFeed;
+    try {
+      payload = JSON.parse(rawPayload) as ExternalInventoryFeed;
+    } catch {
+      throw new Error('Feed retornou um payload que nao e JSON valido.');
+    }
+
     if (!payload?.veiculos || !Array.isArray(payload.veiculos)) {
-      throw new Error('Feed de estoque invÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡lido.');
+      throw new Error('Feed de estoque invalido: lista de veiculos nao encontrada.');
     }
 
     return payload;
   }
 
+  private async resolveWarmupCookies(feedUrl: string, headers: Headers) {
+    const referer = headers.get('Referer')?.trim();
+    const warmupUrl = referer || this.resolveWarmupUrl(feedUrl);
+
+    const warmupHeaders = new Headers();
+    const userAgent = headers.get('User-Agent');
+    if (userAgent) {
+      warmupHeaders.set('User-Agent', userAgent);
+    }
+
+    const acceptLanguage = headers.get('Accept-Language');
+    if (acceptLanguage) {
+      warmupHeaders.set('Accept-Language', acceptLanguage);
+    }
+
+    const origin = headers.get('Origin');
+    if (origin) {
+      warmupHeaders.set('Origin', origin);
+    }
+
+    const response = await fetch(warmupUrl, {
+      method: 'GET',
+      headers: warmupHeaders,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Falha ao preparar sessao do feed: ${response.status}`);
+    }
+
+    const getSetCookie = (response.headers as Headers & { getSetCookie?: () => string[] }).getSetCookie;
+    const cookies = typeof getSetCookie === 'function' ? getSetCookie.call(response.headers) : [];
+    if (!cookies.length) {
+      return null;
+    }
+
+    return cookies
+      .map((cookie) => cookie.split(';', 1)[0]?.trim())
+      .filter((cookie): cookie is string => !!cookie)
+      .join('; ');
+  }
+
+  private resolveWarmupUrl(feedUrl: string) {
+    const parsed = new URL(feedUrl);
+    return `${parsed.origin}/`;
+  }
+
+  private resolveFeedMethod(value?: string | null) {
+    const normalized = value?.trim().toUpperCase();
+    if (!normalized) {
+      return 'GET';
+    }
+
+    if (normalized !== 'GET' && normalized !== 'POST') {
+      throw new Error(`Metodo de feed nao suportado: ${normalized}.`);
+    }
+
+    return normalized;
+  }
+
+  private resolveFeedHeaders(value?: string | null) {
+    const headers = new Headers();
+    const raw = value?.trim();
+
+    if (!raw) {
+      return headers;
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      throw new Error('Headers customizados invalidos: use um JSON valido.');
+    }
+
+    if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') {
+      throw new Error('Headers customizados invalidos: informe um objeto JSON.');
+    }
+
+    for (const [key, headerValue] of Object.entries(parsed as Record<string, unknown>)) {
+      if (headerValue === null || headerValue === undefined) {
+        continue;
+      }
+
+      headers.set(key, String(headerValue));
+    }
+
+    return headers;
+  }
+
+  private resolveFeedBody(value?: string | null, headers?: Headers) {
+    const raw = value?.trim();
+    if (!raw) {
+      return undefined;
+    }
+
+    if (headers && !headers.has('Content-Type') && /^[\[{]/.test(raw)) {
+      headers.set('Content-Type', 'application/json; charset=UTF-8');
+    }
+
+    return raw;
+  }
   private applyExternalVehicle(
     entity: VehicleEntity,
     shop: ShopEntity,
@@ -448,10 +589,10 @@ export class InventorySyncService {
     const bucketBaseUrl = shop.inventoryImageBucketBaseUrl?.trim();
     const storeCode = this.nullableString(feed.cod_loja ?? shop.inventorySourceCode ?? undefined);
     return {
-      buildOriginalUrl: (_feed: ExternalInventoryFeed, _record: ExternalVehicleRecord, filename: string) =>
-        this.buildPhotoUrl(bucketBaseUrl, storeCode, filename),
-      buildThumbnailUrl: (_feed: ExternalInventoryFeed, _record: ExternalVehicleRecord, filename: string) =>
-        this.buildPhotoUrl(bucketBaseUrl, storeCode, filename),
+      buildOriginalUrl: (_feed: ExternalInventoryFeed, record: ExternalVehicleRecord, filename: string) =>
+        this.buildPhotoUrl(bucketBaseUrl, storeCode, filename, record),
+      buildThumbnailUrl: (_feed: ExternalInventoryFeed, record: ExternalVehicleRecord, filename: string) =>
+        this.buildPhotoUrl(bucketBaseUrl, storeCode, filename, record),
     };
   }
 
@@ -478,7 +619,12 @@ export class InventorySyncService {
     return trimmed.slice(0, -extension.length) + '-004' + extension;
   }
 
-  private buildPhotoUrl(bucketBaseUrl: string | undefined, storeCode: string | null, filename: string) {
+  private buildPhotoUrl(
+    bucketBaseUrl: string | undefined,
+    storeCode: string | null,
+    filename: string,
+    record?: ExternalVehicleRecord,
+  ) {
     const trimmed = filename.trim();
     if (!trimmed) {
       return trimmed;
@@ -490,6 +636,15 @@ export class InventorySyncService {
 
     if (!bucketBaseUrl) {
       return trimmed;
+    }
+
+    if (bucketBaseUrl.includes('{filename}')) {
+      return bucketBaseUrl
+        .replace(/\{filename\}/g, encodeURIComponent(trimmed))
+        .replace(/\{cod_loja\}/g, encodeURIComponent(storeCode ?? ''))
+        .replace(/\{storeCode\}/g, encodeURIComponent(storeCode ?? ''))
+        .replace(/\{cod_veiculo\}/g, encodeURIComponent(String(record?.cod_veiculo ?? '')))
+        .replace(/\{externalVehicleId\}/g, encodeURIComponent(String(record?.cod_veiculo ?? '')));
     }
 
     const normalizedBase = bucketBaseUrl.replace(/\/+$/, '');
@@ -610,3 +765,9 @@ export class InventorySyncService {
     return this.nullableString(value, 40);
   }
 }
+
+
+
+
+
+

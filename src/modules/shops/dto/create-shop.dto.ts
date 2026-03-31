@@ -67,6 +67,21 @@ export class CreateShopDto {
   @IsString()
   inventoryFeedUrl?: string;
 
+  @ApiPropertyOptional({ example: 'POST' })
+  @IsOptional()
+  @IsString()
+  inventoryFeedMethod?: string;
+
+  @ApiPropertyOptional({ example: '{"Accept":"application/json"}' })
+  @IsOptional()
+  @IsString()
+  inventoryRequestHeaders?: string;
+
+  @ApiPropertyOptional({ example: '{"token":"abc"}' })
+  @IsOptional()
+  @IsString()
+  inventoryRequestBody?: string;
+
   @ApiPropertyOptional({ example: 'revenda-x' })
   @IsOptional()
   @IsString()

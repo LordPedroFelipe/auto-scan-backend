@@ -83,6 +83,9 @@ export class ShopsService {
       zipCode: dto.zipCode ?? null,
       qrCodeLimit: dto.qrCodeLimit ?? 10,
       inventoryFeedUrl: dto.inventoryFeedUrl ?? null,
+      inventoryFeedMethod: dto.inventoryFeedMethod?.trim().toUpperCase() ?? null,
+      inventoryRequestBody: dto.inventoryRequestBody ?? null,
+      inventoryRequestHeaders: dto.inventoryRequestHeaders ?? null,
       inventorySourceCode: dto.inventorySourceCode ?? null,
       inventorySourceName: dto.inventorySourceName ?? null,
       inventoryImageBucketBaseUrl: dto.inventoryImageBucketBaseUrl ?? null,
@@ -231,6 +234,15 @@ export class ShopsService {
     shop.qrCodeLimit = dto.qrCodeLimit ?? shop.qrCodeLimit;
     if ('inventoryFeedUrl' in dto) {
       shop.inventoryFeedUrl = dto.inventoryFeedUrl ?? null;
+    }
+    if ('inventoryFeedMethod' in dto) {
+      shop.inventoryFeedMethod = dto.inventoryFeedMethod?.trim().toUpperCase() ?? null;
+    }
+    if ('inventoryRequestBody' in dto) {
+      shop.inventoryRequestBody = dto.inventoryRequestBody ?? null;
+    }
+    if ('inventoryRequestHeaders' in dto) {
+      shop.inventoryRequestHeaders = dto.inventoryRequestHeaders ?? null;
     }
     if ('inventorySourceCode' in dto) {
       shop.inventorySourceCode = dto.inventorySourceCode ?? null;

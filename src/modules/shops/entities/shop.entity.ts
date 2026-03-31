@@ -49,6 +49,15 @@ export class ShopEntity {
   @Column({ type: 'varchar', nullable: true, length: 500 })
   inventoryFeedUrl!: string | null;
 
+  @Column({ type: 'varchar', nullable: true, length: 10 })
+  inventoryFeedMethod!: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  inventoryRequestBody!: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  inventoryRequestHeaders!: string | null;
+
   @Column({ type: 'varchar', nullable: true, length: 80 })
   inventorySourceCode!: string | null;
 
