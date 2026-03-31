@@ -184,6 +184,7 @@ export class TestDrivesService {
       existingLead.notes = [existingLead.notes, leadNotes]
         .filter(Boolean)
         .join('\n\n');
+      existingLead.origin = existingLead.origin ?? 'Agendamento Test Drive';
       existingLead.status = existingLead.status ?? LeadStatus.New;
       const savedLead = await this.leadsRepository.save(existingLead);
       return savedLead.id;
@@ -194,6 +195,7 @@ export class TestDrivesService {
       email: normalizedEmail,
       phone: normalizedPhone,
       city: vehicle.city ?? null,
+      origin: 'Agendamento Test Drive',
       notes: leadNotes,
       status: LeadStatus.New,
       hasBeenContacted: false,

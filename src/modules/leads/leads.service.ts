@@ -5,7 +5,10 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { LeadNoteEntity } from '../lead-notes/entities/lead-note.entity';
+import { SaleClosureEntity, SaleOutcomeType } from '../sales/entities/sale-closure.entity';
 import { ShopEntity } from '../shops/entities/shop.entity';
+import { TestDriveEntity } from '../test-drives/entities/test-drive.entity';
 import { UserEntity } from '../users/entities/user.entity';
 import { VehicleEntity } from '../vehicles/entities/vehicle.entity';
 import { CreateLeadDto } from './dto/create-lead.dto';
@@ -24,6 +27,12 @@ export class LeadsService {
     private readonly vehiclesRepository: Repository<VehicleEntity>,
     @InjectRepository(UserEntity)
     private readonly usersRepository: Repository<UserEntity>,
+    @InjectRepository(LeadNoteEntity)
+    private readonly leadNotesRepository: Repository<LeadNoteEntity>,
+    @InjectRepository(TestDriveEntity)
+    private readonly testDrivesRepository: Repository<TestDriveEntity>,
+    @InjectRepository(SaleClosureEntity)
+    private readonly saleClosuresRepository: Repository<SaleClosureEntity>,
   ) {}
 
   async findAll(query: LeadsQueryDto) {
@@ -115,7 +124,7 @@ export class LeadsService {
       ...dto,
       email: dto.email?.toLowerCase() ?? null,
       city: dto.city ?? null,
-      origin: dto.origin?.trim() ?? null,
+      origin: this.resolveLeadOrigin(dto.origin, 'CRM Manual'),
       notes: dto.notes ?? null,
       status: dto.status ?? LeadStatus.New,
       hasBeenContacted: dto.hasBeenContacted ?? false,
@@ -155,6 +164,195 @@ export class LeadsService {
     const lead = await this.findOne(id);
     await this.leadsRepository.remove(lead);
     return { success: true };
+  }
+
+  async crmDetail(id: string) {
+    const lead = await this.findOne(id);
+
+    const [notes, testDrives, saleClosure] = await Promise.all([
+      this.leadNotesRepository.find({
+        where: { leadId: id },
+        relations: { user: true },
+        order: { createdAt: 'DESC' },
+        take: 100,
+      }),
+      this.testDrivesRepository.find({
+        where: { leadId: id },
+        relations: { vehicle: true, shop: true, lead: true },
+        order: { preferredDate: 'DESC' },
+        take: 20,
+      }),
+      this.saleClosuresRepository.findOne({
+        where: { leadId: id },
+        relations: { lead: true, seller: true, vehicle: true, testDrive: true, shop: true },
+      }),
+    ]);
+
+    const timeline = [
+      {
+        id: `lead-created-${lead.id}`,
+        kind: 'lead_created',
+        title: 'Lead criado',
+        description: `Lead entrou na operacao${lead.origin ? ` via ${lead.origin}` : ''}.`,
+        occurredAt: lead.createdAt,
+        tone: 'ocean',
+      },
+      ...(lead.contactDate
+        ? [{
+            id: `lead-contact-${lead.id}`,
+            kind: 'first_contact',
+            title: 'Primeiro contato registrado',
+            description: 'O time marcou o primeiro contato comercial.',
+            occurredAt: lead.contactDate,
+            tone: 'amber',
+          }]
+        : []),
+      ...(lead.lastContactDate
+        ? [{
+            id: `lead-last-contact-${lead.id}`,
+            kind: 'last_contact',
+            title: 'Ultimo follow-up registrado',
+            description: 'Lead recebeu interacao recente do time.',
+            occurredAt: lead.lastContactDate,
+            tone: 'plum',
+          }]
+        : []),
+      ...notes.map((note) => ({
+        id: `note-${note.id}`,
+        kind: 'note',
+        title: note.type,
+        description: note.comment,
+        occurredAt: note.createdAt,
+        tone: note.type === 'Aviso' ? 'danger' : note.type === 'Contato' ? 'amber' : 'slate',
+        meta: {
+          userName: note.user?.userName ?? 'Sistema',
+        },
+      })),
+      ...testDrives.map((testDrive) => ({
+        id: `test-drive-${testDrive.id}`,
+        kind: 'test_drive',
+        title: 'Test drive registrado',
+        description: `${testDrive.vehicle?.brand ?? ''} ${testDrive.vehicle?.model ?? ''} ${testDrive.vehicle?.version ?? ''}`.trim() || 'Agendamento vinculado ao lead',
+        occurredAt: testDrive.preferredDate,
+        tone: testDrive.status === 'Completed' ? 'forest' : testDrive.status === 'Canceled' ? 'danger' : 'ocean',
+        meta: {
+          status: testDrive.status,
+          preferredTime: testDrive.preferredTime,
+        },
+      })),
+      ...(saleClosure
+        ? [{
+            id: `sale-${saleClosure.id}`,
+            kind: 'sale_closure',
+            title: saleClosure.outcomeType === SaleOutcomeType.Sale ? 'Venda registrada' : 'Nao venda registrada',
+            description: saleClosure.notes || saleClosure.noSaleReason || 'Decisao final do lead registrada.',
+            occurredAt: saleClosure.closedAt,
+            tone: saleClosure.outcomeType === SaleOutcomeType.Sale ? 'forest' : 'danger',
+            meta: {
+              outcomeType: saleClosure.outcomeType,
+              salePrice: saleClosure.salePrice,
+              sellerName: saleClosure.seller?.userName ?? null,
+            },
+          }]
+        : []),
+    ]
+      .sort((left, right) => new Date(right.occurredAt).getTime() - new Date(left.occurredAt).getTime());
+
+    const createdAt = lead.createdAt ? new Date(lead.createdAt).getTime() : Date.now();
+    const daysOpen = Math.max(Math.ceil((Date.now() - createdAt) / 86400000), 0);
+
+    return {
+      lead,
+      summary: {
+        daysOpen,
+        noteCount: notes.length,
+        testDriveCount: testDrives.length,
+        hasSaleClosure: !!saleClosure,
+        lastInteractionAt:
+          timeline[0]?.occurredAt?.toISOString?.()
+          ?? (timeline[0]?.occurredAt ? new Date(timeline[0].occurredAt).toISOString() : null),
+      },
+      notes: notes.map((note) => ({
+        id: note.id,
+        leadId: note.leadId,
+        userId: note.userId,
+        userName: note.user?.userName ?? 'Sistema',
+        comment: note.comment,
+        type: note.type,
+        createdAt: note.createdAt,
+      })),
+      testDrives: testDrives.map((testDrive) => ({
+        id: testDrive.id,
+        vehicleId: testDrive.vehicleId,
+        shopId: testDrive.shopId,
+        leadId: testDrive.leadId,
+        customerName: testDrive.customerName,
+        customerEmail: testDrive.customerEmail,
+        customerPhone: testDrive.customerPhone,
+        preferredDate: testDrive.preferredDate,
+        preferredTime: testDrive.preferredTime,
+        notes: testDrive.notes,
+        status: testDrive.status,
+        createdAt: testDrive.createdAt,
+        updatedAt: testDrive.updatedAt,
+        vehicleBrand: testDrive.vehicle?.brand ?? null,
+        vehicleModel: testDrive.vehicle?.model ?? null,
+        vehicleVersion: testDrive.vehicle?.version ?? null,
+        vehicleYear: testDrive.vehicle?.year ?? null,
+        vehicleMainPhotoUrl:
+          testDrive.vehicle?.thumbnailPhotoUrls?.[0]
+          ?? testDrive.vehicle?.originalPhotoUrls?.[0]
+          ?? testDrive.vehicle?.photoUrls?.[0]
+          ?? null,
+        shopName: testDrive.shop?.name ?? null,
+      })),
+      saleClosure: saleClosure
+        ? {
+            id: saleClosure.id,
+            outcomeType: saleClosure.outcomeType,
+            paymentMethod: saleClosure.paymentMethod,
+            giftType: saleClosure.giftType,
+            noSaleReason: saleClosure.noSaleReason,
+            listPrice: Number(saleClosure.listPrice ?? 0),
+            salePrice: Number(saleClosure.salePrice ?? 0),
+            discountValue: Number(saleClosure.discountValue ?? 0),
+            discountPercent: Number(saleClosure.discountPercent ?? 0),
+            entryValue: saleClosure.entryValue == null ? null : Number(saleClosure.entryValue),
+            installments: saleClosure.installments,
+            commissionValue: saleClosure.commissionValue == null ? null : Number(saleClosure.commissionValue),
+            tradeInAccepted: saleClosure.tradeInAccepted,
+            tradeInDescription: saleClosure.tradeInDescription,
+            competitorName: saleClosure.competitorName,
+            accessoryDescription: saleClosure.accessoryDescription,
+            closedAt: saleClosure.closedAt,
+            notes: saleClosure.notes,
+            seller: saleClosure.seller
+              ? {
+                  id: saleClosure.seller.id,
+                  userName: saleClosure.seller.userName ?? null,
+                  email: saleClosure.seller.email ?? null,
+                }
+              : null,
+            vehicle: saleClosure.vehicle
+              ? {
+                  id: saleClosure.vehicle.id,
+                  label: [saleClosure.vehicle.brand, saleClosure.vehicle.model, saleClosure.vehicle.version].filter(Boolean).join(' '),
+                  brand: saleClosure.vehicle.brand ?? null,
+                  model: saleClosure.vehicle.model ?? null,
+                  version: saleClosure.vehicle.version ?? null,
+                  year: saleClosure.vehicle.year ?? null,
+                  price: saleClosure.vehicle.price == null ? null : Number(saleClosure.vehicle.price),
+                  mainPhotoUrl:
+                    saleClosure.vehicle.thumbnailPhotoUrls?.[0]
+                    ?? saleClosure.vehicle.originalPhotoUrls?.[0]
+                    ?? saleClosure.vehicle.photoUrls?.[0]
+                    ?? null,
+                }
+              : null,
+          }
+        : null,
+      timeline,
+    };
   }
 
   private async ensureRelations(
@@ -204,5 +402,10 @@ export class LeadsService {
       shopId: shopId ?? vehicle.shopId ?? null,
       vehicleId,
     };
+  }
+
+  private resolveLeadOrigin(origin?: string | null, fallback = 'CRM Manual') {
+    const normalized = origin?.trim();
+    return normalized ? normalized : fallback;
   }
 }

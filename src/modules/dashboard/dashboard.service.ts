@@ -266,6 +266,9 @@ export class DashboardService {
       leadsBySeller,
       sellerRanking,
       salesBySeller,
+      salesByDay,
+      noSaleReasons,
+      paymentMethods,
       stockByBrand,
       recentLeads,
       upcomingTestDrives,
@@ -298,7 +301,10 @@ export class DashboardService {
       this.getLeadFunnel(shopId, selectedSellerId, selectedLeadOrigin),
       this.aggregateLeadsBySeller(shopId, currentStart, selectedLeadOrigin),
       this.aggregateSellerPerformance(shopId, currentStart, selectedLeadOrigin),
-      this.aggregateSalesBySeller(shopId, currentStart),
+      this.aggregateSalesBySeller(shopId, currentStart, selectedSellerId, selectedLeadOrigin),
+      this.aggregateSalesByDay(shopId, chartStart, selectedSellerId, selectedLeadOrigin),
+      this.aggregateNoSaleReasons(shopId, currentStart, selectedSellerId, selectedLeadOrigin),
+      this.aggregatePaymentMethods(shopId, currentStart, selectedSellerId, selectedLeadOrigin),
       this.aggregateStockByBrand(shopId),
       this.findRecentLeads(shopId, selectedSellerId, selectedLeadOrigin),
       this.testDrivesRepository.find({ where: { shopId }, relations: { vehicle: true, lead: true }, order: { preferredDate: 'ASC' }, take: 6 }),
@@ -309,7 +315,7 @@ export class DashboardService {
       this.countLeadsWithFilters(shopId, currentStart, undefined, selectedSellerId, selectedLeadOrigin, LeadStatus.Won),
       this.countLeadsWithFilters(shopId, previousStart, previousEnd, selectedSellerId, selectedLeadOrigin, LeadStatus.Won),
       this.listLeadOrigins(shopId),
-      this.aggregateSaleOutcomeSummary(shopId, currentStart),
+      this.aggregateSaleOutcomeSummary(shopId, currentStart, undefined, selectedSellerId, selectedLeadOrigin),
     ]);
 
     const alerts = [
@@ -322,6 +328,7 @@ export class DashboardService {
     ].filter(Boolean);
 
     const leadToTestDriveRate = leadsCurrent > 0 ? Math.round((testDrivesCurrent / leadsCurrent) * 100) : 0;
+    const leadToSaleRate = leadsCurrent > 0 ? Math.round((outcomeSummary.sales / leadsCurrent) * 100) : 0;
 
     return {
       role: 'shop-admin',
@@ -366,14 +373,20 @@ export class DashboardService {
       charts: {
         leadsByDay: this.fillSeries(leadChart, chartStart, chartDays),
         testDrivesByDay: this.fillSeries(testDriveChart, chartStart, chartDays),
+        salesByDay: this.fillSeries(salesByDay, chartStart, chartDays),
         leadStatusDistribution: leadStatusRows,
         leadsBySeller,
         stockByBrand,
         funnel: leadFunnelCounts,
         salesBySeller,
+        noSaleReasons,
+        paymentMethods,
       },
       sellerRanking,
-      sales: outcomeSummary,
+      sales: {
+        ...outcomeSummary,
+        conversionRate: leadToSaleRate,
+      },
       ai: {
         sessions30d: sessionsCurrent,
         topKeywords: topDemandKeywords,
@@ -682,6 +695,8 @@ export class DashboardService {
       .getRawMany<{ sellerId: string | null; testDrives: string }>();
 
     const testDriveMap = new Map(testDriveRows.map((row) => [row.sellerId ?? 'none', Number(row.testDrives)]));
+    const salesRows = await this.aggregateSellerSalesMetrics(shopId, start, undefined, leadOrigin);
+    const salesMap = new Map(salesRows.map((row) => [row.sellerId ?? 'none', row]));
 
     return leadsRows
       .map((row) => {
@@ -689,6 +704,7 @@ export class DashboardService {
         const wonLeads = Number(row.wonLeads);
         const testDrives = testDriveMap.get(row.sellerId ?? 'none') ?? 0;
         const conversionRate = leads > 0 ? Math.round((wonLeads / leads) * 100) : 0;
+        const salesMetrics = salesMap.get(row.sellerId ?? 'none');
 
         return {
           sellerId: row.sellerId,
@@ -697,31 +713,105 @@ export class DashboardService {
           testDrives,
           wonLeads,
           conversionRate,
+          sales: salesMetrics?.sales ?? 0,
+          noSales: salesMetrics?.noSales ?? 0,
+          revenue: salesMetrics?.revenue ?? 0,
+          averageTicket: salesMetrics?.averageTicket ?? 0,
         };
       })
       .sort((left, right) => right.conversionRate - left.conversionRate || right.leads - left.leads)
       .slice(0, 8);
   }
 
-  private async aggregateSalesBySeller(shopId: string, start: Date) {
-    const rows = await this.saleClosuresRepository.createQueryBuilder('sale')
+  private async aggregateSalesBySeller(shopId: string, start: Date, sellerId?: string, leadOrigin?: string) {
+    const rows = await this.aggregateSellerSalesMetrics(shopId, start, sellerId, leadOrigin);
+    return rows.map((row) => ({
+      label: row.sellerName,
+      sales: row.sales,
+      noSales: row.noSales,
+      value: row.sales,
+    }));
+  }
+
+  private async aggregateSellerSalesMetrics(shopId: string, start: Date, sellerId?: string, leadOrigin?: string) {
+    const qb = this.saleClosuresRepository.createQueryBuilder('sale')
       .leftJoin('sale.seller', 'seller')
-      .select(`COALESCE(seller.userName, 'Sem vendedor')`, 'label')
+      .leftJoin('sale.lead', 'lead')
+      .select('sale.sellerId', 'sellerId')
+      .addSelect(`COALESCE(seller.userName, 'Sem vendedor')`, 'sellerName')
       .addSelect(`SUM(CASE WHEN sale.outcomeType = :saleOutcome THEN 1 ELSE 0 END)::int`, 'sales')
       .addSelect(`SUM(CASE WHEN sale.outcomeType = :noSaleOutcome THEN 1 ELSE 0 END)::int`, 'noSales')
+      .addSelect(`COALESCE(SUM(CASE WHEN sale.outcomeType = :saleOutcome THEN sale.salePrice ELSE 0 END), 0)`, 'revenue')
+      .addSelect(`COALESCE(AVG(CASE WHEN sale.outcomeType = :saleOutcome THEN sale.salePrice END), 0)`, 'averageTicket')
       .where('sale.shopId = :shopId', { shopId })
       .andWhere('sale.closedAt >= :start', { start })
-      .setParameters({ saleOutcome: SaleOutcomeType.Sale, noSaleOutcome: SaleOutcomeType.NoSale })
-      .groupBy('seller.userName')
-      .orderBy('sales', 'DESC')
-      .getRawMany<{ label: string; sales: string; noSales: string }>();
+      .setParameters({ saleOutcome: SaleOutcomeType.Sale, noSaleOutcome: SaleOutcomeType.NoSale });
+
+    if (sellerId) qb.andWhere('sale.sellerId = :sellerId', { sellerId });
+    if (leadOrigin) qb.andWhere('lead.origin = :leadOrigin', { leadOrigin });
+
+    const rows = await qb
+      .groupBy('sale.sellerId')
+      .addGroupBy('seller.userName')
+      .orderBy('revenue', 'DESC')
+      .getRawMany<{ sellerId: string | null; sellerName: string; sales: string; noSales: string; revenue: string; averageTicket: string }>();
 
     return rows.map((row) => ({
-      label: row.label,
+      sellerId: row.sellerId,
+      sellerName: row.sellerName,
       sales: Number(row.sales),
       noSales: Number(row.noSales),
-      value: Number(row.sales),
+      revenue: Number(row.revenue),
+      averageTicket: Number(row.averageTicket),
     }));
+  }
+
+  private async aggregateSalesByDay(shopId: string, start: Date, sellerId?: string, leadOrigin?: string) {
+    const qb = this.saleClosuresRepository.createQueryBuilder('sale')
+      .leftJoin('sale.lead', 'lead')
+      .select('DATE(sale.closedAt)', 'date')
+      .addSelect(`SUM(CASE WHEN sale.outcomeType = :saleOutcome THEN 1 ELSE 0 END)::int`, 'value')
+      .where('sale.shopId = :shopId', { shopId })
+      .andWhere('sale.closedAt >= :start', { start })
+      .setParameter('saleOutcome', SaleOutcomeType.Sale);
+
+    if (sellerId) qb.andWhere('sale.sellerId = :sellerId', { sellerId });
+    if (leadOrigin) qb.andWhere('lead.origin = :leadOrigin', { leadOrigin });
+
+    const rows = await qb.groupBy('DATE(sale.closedAt)').orderBy('DATE(sale.closedAt)', 'ASC').getRawMany<{ date: string; value: string }>();
+    return rows.map((row) => ({ date: row.date, value: Number(row.value) }));
+  }
+
+  private async aggregateNoSaleReasons(shopId: string, start: Date, sellerId?: string, leadOrigin?: string) {
+    const qb = this.saleClosuresRepository.createQueryBuilder('sale')
+      .leftJoin('sale.lead', 'lead')
+      .select(`COALESCE(sale.noSaleReason, 'Nao informado')`, 'label')
+      .addSelect('COUNT(*)::int', 'value')
+      .where('sale.shopId = :shopId', { shopId })
+      .andWhere('sale.closedAt >= :start', { start })
+      .andWhere('sale.outcomeType = :outcomeType', { outcomeType: SaleOutcomeType.NoSale });
+
+    if (sellerId) qb.andWhere('sale.sellerId = :sellerId', { sellerId });
+    if (leadOrigin) qb.andWhere('lead.origin = :leadOrigin', { leadOrigin });
+
+    const rows = await qb.groupBy('sale.noSaleReason').orderBy('value', 'DESC').limit(8).getRawMany<{ label: string; value: string }>();
+    return rows.map((row) => ({ label: row.label, value: Number(row.value) }));
+  }
+
+  private async aggregatePaymentMethods(shopId: string, start: Date, sellerId?: string, leadOrigin?: string) {
+    const qb = this.saleClosuresRepository.createQueryBuilder('sale')
+      .leftJoin('sale.lead', 'lead')
+      .select(`COALESCE(sale.paymentMethod, 'Nao informado')`, 'label')
+      .addSelect('COUNT(*)::int', 'value')
+      .where('sale.shopId = :shopId', { shopId })
+      .andWhere('sale.closedAt >= :start', { start })
+      .andWhere('sale.outcomeType = :outcomeType', { outcomeType: SaleOutcomeType.Sale });
+
+    if (sellerId) qb.andWhere('sale.sellerId = :sellerId', { sellerId });
+    if (leadOrigin) qb.andWhere('lead.origin = :leadOrigin', { leadOrigin });
+
+    const rows = await qb.groupBy('sale.paymentMethod').orderBy('value', 'DESC').limit(8).getRawMany<{ label: string; value: string }>();
+    return rows.map((row) => ({ label: row.label, value: Number(row.value) }));
   }
 
   private async aggregateStockByBrand(shopId: string) {
@@ -977,13 +1067,31 @@ export class DashboardService {
     return rows.map((row) => row.origin).filter(Boolean);
   }
 
-  private async aggregateSaleOutcomeSummary(shopId: string, start: Date) {
-    const [sales, noSales] = await Promise.all([
-      this.saleClosuresRepository.count({ where: { shopId, outcomeType: SaleOutcomeType.Sale, closedAt: MoreThanOrEqual(start) } }),
-      this.saleClosuresRepository.count({ where: { shopId, outcomeType: SaleOutcomeType.NoSale, closedAt: MoreThanOrEqual(start) } }),
-    ]);
+  private async aggregateSaleOutcomeSummary(shopId: string, start: Date, end?: Date, sellerId?: string, leadOrigin?: string) {
+    const qb = this.saleClosuresRepository.createQueryBuilder('sale')
+      .leftJoin('sale.lead', 'lead')
+      .select(`SUM(CASE WHEN sale.outcomeType = :saleOutcome THEN 1 ELSE 0 END)::int`, 'sales')
+      .addSelect(`SUM(CASE WHEN sale.outcomeType = :noSaleOutcome THEN 1 ELSE 0 END)::int`, 'noSales')
+      .addSelect(`COALESCE(SUM(CASE WHEN sale.outcomeType = :saleOutcome THEN sale.salePrice ELSE 0 END), 0)`, 'grossRevenue')
+      .addSelect(`COALESCE(AVG(CASE WHEN sale.outcomeType = :saleOutcome THEN sale.salePrice END), 0)`, 'averageTicket')
+      .addSelect(`COALESCE(AVG(CASE WHEN sale.outcomeType = :saleOutcome THEN sale.discountPercent END), 0)`, 'averageDiscount')
+      .where('sale.shopId = :shopId', { shopId })
+      .andWhere('sale.closedAt >= :start', { start })
+      .setParameters({ saleOutcome: SaleOutcomeType.Sale, noSaleOutcome: SaleOutcomeType.NoSale });
 
-    return { sales, noSales };
+    if (end) qb.andWhere('sale.closedAt < :end', { end });
+    if (sellerId) qb.andWhere('sale.sellerId = :sellerId', { sellerId });
+    if (leadOrigin) qb.andWhere('lead.origin = :leadOrigin', { leadOrigin });
+
+    const row = await qb.getRawOne<{ sales: string; noSales: string; grossRevenue: string; averageTicket: string; averageDiscount: string }>();
+
+    return {
+      sales: Number(row?.sales ?? 0),
+      noSales: Number(row?.noSales ?? 0),
+      grossRevenue: Number(row?.grossRevenue ?? 0),
+      averageTicket: Number(row?.averageTicket ?? 0),
+      averageDiscount: Number(row?.averageDiscount ?? 0),
+    };
   }
 
   private async countByDay<T extends object>(

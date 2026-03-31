@@ -32,6 +32,12 @@ export class LeadsController {
     return this.leadsService.listStatuses();
   }
 
+  @ApiOperation({ summary: 'Obter visao CRM completa de um lead' })
+  @Get(':id/crm')
+  crmDetail(@Param('id', new ParseUUIDPipe()) id: string) {
+    return this.leadsService.crmDetail(id);
+  }
+
   @ApiOperation({ summary: 'Obter um lead por ID' })
   @Get(':id')
   findOne(@Param('id', new ParseUUIDPipe()) id: string) {

@@ -698,6 +698,7 @@ export class ChatService {
         existingLead.notes = notes;
         existingLead.vehicleId = session.lastRecommendedVehicleIds[0] ?? session.vehicleId ?? existingLead.vehicleId;
         existingLead.sellerId = existingLead.sellerId ?? seller?.id ?? null;
+        existingLead.origin = existingLead.origin ?? 'Chat IA';
         if (['handoff', 'test_drive', 'financing'].includes(intent)) existingLead.status = LeadStatus.Qualified;
         const saved = await this.leadsRepository.save(existingLead);
         session.leadId = saved.id;
@@ -710,6 +711,7 @@ export class ChatService {
       email: profile.email ?? null,
       phone: profile.phone ?? null,
       city: profile.city ?? null,
+      origin: 'Chat IA',
       notes,
       status: ['handoff', 'test_drive', 'financing'].includes(intent) ? LeadStatus.Qualified : LeadStatus.New,
       hasBeenContacted: false,
