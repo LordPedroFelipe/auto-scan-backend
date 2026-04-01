@@ -148,8 +148,11 @@ export class VehiclesQueryDto {
 
   @IsOptional()
   @Transform(toBoolean)
-  @IsBoolean()
-  isSold?: boolean;
+  @IsBoolean()  isConsigned?: boolean;
+
+  @IsOptional()
+  @Transform(toBoolean)
+  @IsBoolean()  isSold?: boolean;
 
   @IsOptional()
   @Transform(toBoolean)

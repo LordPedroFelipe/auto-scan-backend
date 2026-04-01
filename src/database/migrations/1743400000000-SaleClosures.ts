@@ -27,7 +27,7 @@ export class SaleClosures1743400000000 implements MigrationInterface {
     `);
     await queryRunner.query(`
       DO $$ BEGIN
-        CREATE TYPE "public"."sale_closures_nosalereason_enum" AS ENUM('Price', 'CreditDenied', 'ChoseCompetitor', 'NoContact', 'StockUnavailable', 'PostponedDecision', 'VehicleMismatch', 'Other');
+        CREATE TYPE "public"."sale_closures_nosalereason_enum" AS ENUM('Price', 'CreditDenied', 'ChoseCompetitor', 'NoContact', 'StockUnavailable', 'PostponedDecision', 'VehicleMismatch', 'Other', 'NotInformed');
       EXCEPTION
         WHEN duplicate_object THEN null;
       END $$;

@@ -113,18 +113,40 @@ export class LeadsService {
     return lead;
   }
 
-  async create(dto: CreateLeadDto) {
+  async create(dto: CreateLeadDto, request?: any) {
     const { shopId, vehicleId } = await this.resolveShopAndVehicle(
       dto.shopId,
       dto.vehicleId,
     );
     await this.ensureRelations(shopId, vehicleId, dto.sellerId);
 
+    // Parse UTM parameters and referrer for automatic origin tracking
+    const utmParams = this.parseUtmParams(request);
+    const referrer = this.parseReferrer(request);
+
+    // Auto-detect origin if not provided
+    let originSource = dto.originSource ?? utmParams.source;
+    let originMedium = dto.originMedium ?? utmParams.medium;
+    let originCampaign = dto.originCampaign ?? utmParams.campaign;
+    let originReferrer = dto.originReferrer ?? referrer;
+    let originUtmParams = dto.originUtmParams ?? (Object.keys(utmParams).length > 0 ? utmParams : null);
+
+    // If origin is not set and we have UTM data, set a default origin
+    let origin = dto.origin;
+    if (!origin && (originSource || originMedium || originCampaign)) {
+      origin = 'Marketing Digital';
+    }
+
     const lead = this.leadsRepository.create({
       ...dto,
       email: dto.email?.toLowerCase() ?? null,
       city: dto.city ?? null,
-      origin: this.resolveLeadOrigin(dto.origin, 'CRM Manual'),
+      origin: this.resolveLeadOrigin(origin, 'CRM Manual'),
+      originSource,
+      originMedium,
+      originCampaign,
+      originReferrer,
+      originUtmParams,
       notes: dto.notes ?? null,
       status: dto.status ?? LeadStatus.New,
       hasBeenContacted: dto.hasBeenContacted ?? false,
@@ -402,6 +424,34 @@ export class LeadsService {
       shopId: shopId ?? vehicle.shopId ?? null,
       vehicleId,
     };
+  }
+
+  private parseUtmParams(request?: any): Record<string, string> {
+    if (!request?.query) return {};
+
+    const utmParams: Record<string, string> = {};
+    const utmKeys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'];
+
+    for (const key of utmKeys) {
+      if (request.query[key]) {
+        utmParams[key.replace('utm_', '')] = request.query[key];
+      }
+    }
+
+    return utmParams;
+  }
+
+  private parseReferrer(request?: any): string | null {
+    if (!request?.headers?.referer) return null;
+
+    const referrer = request.headers.referer;
+    // Extract domain from referrer URL
+    try {
+      const url = new URL(referrer);
+      return url.hostname;
+    } catch {
+      return referrer; // fallback to full referrer if parsing fails
+    }
   }
 
   private resolveLeadOrigin(origin?: string | null, fallback = 'CRM Manual') {

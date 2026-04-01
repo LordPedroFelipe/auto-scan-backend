@@ -13,7 +13,7 @@ import { PermissionsModule } from './modules/permissions/permissions.module';
 import { QrCodeModule } from './modules/qrcode/qrcode.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { SettingsModule } from './modules/settings/settings.module';
-import { SalesModule } from './modules/sales/sales.module';
+import { SalesGoalsModule } from './modules/sales-goals/sales-goals.module';
 import { ShopsModule } from './modules/shops/shops.module';
 import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
 import { TestDrivesModule } from './modules/test-drives/test-drives.module';
@@ -49,8 +49,8 @@ import { VehiclesModule } from './modules/vehicles/vehicles.module';
     PermissionsModule,
     QrCodeModule,
     ReportsModule,
+    SalesGoalsModule,
     SettingsModule,
-    SalesModule,
     UsersModule,
     ShopsModule,
     SubscriptionsModule,

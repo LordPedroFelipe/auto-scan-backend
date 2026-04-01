@@ -34,6 +34,30 @@ export class CreateLeadDto {
   @IsString()
   origin?: string;
 
+  @ApiPropertyOptional({ example: 'google' })
+  @IsOptional()
+  @IsString()
+  originSource?: string;
+
+  @ApiPropertyOptional({ example: 'cpc' })
+  @IsOptional()
+  @IsString()
+  originMedium?: string;
+
+  @ApiPropertyOptional({ example: 'summer_sale' })
+  @IsOptional()
+  @IsString()
+  originCampaign?: string;
+
+  @ApiPropertyOptional({ example: 'https://google.com' })
+  @IsOptional()
+  @IsString()
+  originReferrer?: string;
+
+  @ApiPropertyOptional({ example: { utm_source: 'google', utm_medium: 'cpc' } })
+  @IsOptional()
+  originUtmParams?: Record<string, any>;
+
   @ApiPropertyOptional({ example: 'Cliente pediu retorno via WhatsApp.' })
   @IsOptional()
   @IsString()

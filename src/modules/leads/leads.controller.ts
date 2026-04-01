@@ -8,6 +8,8 @@ import {
   Post,
   Query,
   Put,
+  Req,
+  Request,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CreateLeadDto } from './dto/create-lead.dto';
@@ -46,8 +48,8 @@ export class LeadsController {
 
   @ApiOperation({ summary: 'Criar lead' })
   @Post()
-  create(@Body() dto: CreateLeadDto) {
-    return this.leadsService.create(dto);
+  create(@Body() dto: CreateLeadDto, @Req() request: Request) {
+    return this.leadsService.create(dto, request);
   }
 
   @ApiOperation({ summary: 'Atualizar lead' })

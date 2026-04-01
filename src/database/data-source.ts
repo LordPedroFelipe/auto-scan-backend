@@ -27,6 +27,7 @@ import { InventorySyncLogs1743380000000 } from './migrations/1743380000000-Inven
 import { ShopInventoryRequestConfig1743390000000 } from './migrations/1743390000000-ShopInventoryRequestConfig';
 import { SaleClosures1743400000000 } from './migrations/1743400000000-SaleClosures';
 import { LeadOrigin1743410000000 } from './migrations/1743410000000-LeadOrigin';
+import { AddIsConsignedToVehicle1743420000000 } from './migrations/1743420000000-AddIsConsignedToVehicle';
 
 export const AppDataSource = new DataSource({
   type: 'postgres',
@@ -65,6 +66,7 @@ export const AppDataSource = new DataSource({
     ShopInventoryRequestConfig1743390000000,
     SaleClosures1743400000000,
     LeadOrigin1743410000000,
+    AddIsConsignedToVehicle1743420000000,
   ],
 });
 

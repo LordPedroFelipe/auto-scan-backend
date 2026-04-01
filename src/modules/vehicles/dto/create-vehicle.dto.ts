@@ -200,6 +200,12 @@ export class CreateVehicleDto {
   @IsOptional()
   @Transform(toOptionalBoolean)
   @IsBoolean()
+  isConsigned?: boolean;
+
+  @ApiPropertyOptional({ example: false })
+  @IsOptional()
+  @Transform(toOptionalBoolean)
+  @IsBoolean()
   isOnOffer?: boolean;
 
   @ApiPropertyOptional({ example: true })

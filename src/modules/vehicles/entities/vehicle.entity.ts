@@ -114,6 +114,9 @@ export class VehicleEntity {
   isFirstOwner!: boolean;
 
   @Column({ default: false })
+  isConsigned!: boolean;
+
+  @Column({ default: false })
   isOnOffer!: boolean;
 
   @Column({ default: false })

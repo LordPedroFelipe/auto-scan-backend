@@ -557,6 +557,7 @@ export class InventorySyncService {
     entity.hasAccident = false;
     entity.hasAuction = false;
     entity.isFirstOwner = false;
+    entity.isConsigned = false;
     entity.externalVehicleId = String(record.cod_veiculo);
     entity.externalImportId = this.nullableString(record.cod_importacao);
     entity.integrationSource = integrationSource;

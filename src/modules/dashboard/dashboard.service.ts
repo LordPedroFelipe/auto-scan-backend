@@ -9,6 +9,7 @@ import { ChatTelemetryEventEntity } from '../chat/entities/chat-telemetry-event.
 import { InventorySyncLogEntity } from '../inventory-sync/entities/inventory-sync-log.entity';
 import { LeadEntity, LeadStatus } from '../leads/entities/lead.entity';
 import { SaleClosureEntity, SaleOutcomeType } from '../sales/entities/sale-closure.entity';
+import { SalesGoalsService } from '../sales-goals/sales-goals.service';
 import { ShopEntity } from '../shops/entities/shop.entity';
 import { TestDriveEntity, TestDriveStatus } from '../test-drives/entities/test-drive.entity';
 import { UserEntity } from '../users/entities/user.entity';
@@ -31,6 +32,7 @@ export class DashboardService {
     @InjectRepository(InventorySyncLogEntity) private readonly inventorySyncLogsRepository: Repository<InventorySyncLogEntity>,
     @InjectRepository(ChatSessionEntity) private readonly chatSessionsRepository: Repository<ChatSessionEntity>,
     @InjectRepository(ChatTelemetryEventEntity) private readonly chatTelemetryRepository: Repository<ChatTelemetryEventEntity>,
+    private readonly salesGoalsService: SalesGoalsService,
   ) {}
 
   async getDashboardForUser(user: JwtUser, periodDaysRaw?: string, sellerId?: string, leadOrigin?: string) {
@@ -155,7 +157,6 @@ export class DashboardService {
         this.buildKpi(`Leads ${periodDays} dias`, totalLeads, 'comparado ao periodo anterior', this.calculateTrend(totalLeads, previousLeads), 'amber'),
         this.buildKpi(`Test drives ${periodDays} dias`, totalTestDrives, `${conversion}% de conversao lead -> test drive`, this.calculateTrend(totalTestDrives, previousTestDrives), 'plum'),
         this.buildKpi(`Sessoes IA ${periodDays} dias`, sessions, `${telemetryCurrent} eventos de telemetria`, this.calculateTrend(sessions, previousSessions), 'slate'),
-        this.buildKpi('SLA de integracao', slaCompliance, `${shopsWithinSla} loja(s) dentro do SLA`, this.calculateTrend(slaCompliance, previousSlaCompliance), slaCompliance >= 85 ? 'forest' : 'danger', '%'),
       ],
       shortcuts: [
         { label: 'Lojas', route: '/loja-lista', icon: 'storefront' },
@@ -280,6 +281,7 @@ export class DashboardService {
       wonLeadsPrevious,
       leadOrigins,
       outcomeSummary,
+      salesGoals,
     ] = await Promise.all([
       this.shopsRepository.findOne({ where: { id: shopId } }),
       this.countLeadsWithFilters(shopId, todayStart, undefined, selectedSellerId, selectedLeadOrigin),
@@ -316,6 +318,7 @@ export class DashboardService {
       this.countLeadsWithFilters(shopId, previousStart, previousEnd, selectedSellerId, selectedLeadOrigin, LeadStatus.Won),
       this.listLeadOrigins(shopId),
       this.aggregateSaleOutcomeSummary(shopId, currentStart, undefined, selectedSellerId, selectedLeadOrigin),
+      this.salesGoalsService.getGoalsWithProgress(shopId),
     ]);
 
     const alerts = [
@@ -411,6 +414,7 @@ export class DashboardService {
           preferredTime: item.preferredTime,
         })),
       },
+      salesGoals,
       inventory: { withoutPhoto: stockWithoutPhoto, withoutPrice: stockWithoutPrice, staleStock },
       integration: integrationStatus
         ? {
@@ -460,6 +464,7 @@ export class DashboardService {
       monthlyWonLeads,
       monthlyTestDrives,
       monthlyContacted,
+      sellerGoals,
     ] = await Promise.all([
       this.shopsRepository.findOne({ where: { id: shopId } }),
       this.leadsRepository.count({ where: { sellerId, createdAt: MoreThanOrEqual(currentStart) } }),
@@ -481,6 +486,7 @@ export class DashboardService {
       this.leadsRepository.count({ where: { sellerId, status: LeadStatus.Won, createdAt: MoreThanOrEqual(monthStart) } }),
       this.testDrivesRepository.createQueryBuilder('testDrive').leftJoin('testDrive.lead', 'lead').where('lead.sellerId = :sellerId', { sellerId }).andWhere('testDrive.createdAt >= :start', { start: monthStart }).getCount(),
       this.leadsRepository.count({ where: { sellerId, hasBeenContacted: true, createdAt: MoreThanOrEqual(monthStart) } }),
+      this.salesGoalsService.getSellerGoals(sellerId),
     ]);
 
     const goals = this.resolveSellerGoals(shop?.settingsPreferences);
@@ -526,6 +532,7 @@ export class DashboardService {
         leadsByDay: this.fillSeries(leadsByDay, chartStart, chartDays),
         leadStatusDistribution: leadStatusRows,
       },
+      salesGoals: sellerGoals,
       tasks: {
         myLeadsWithoutContact,
         upcomingTestDrives: myTestDrivesUpcoming,
@@ -785,7 +792,20 @@ export class DashboardService {
   private async aggregateNoSaleReasons(shopId: string, start: Date, sellerId?: string, leadOrigin?: string) {
     const qb = this.saleClosuresRepository.createQueryBuilder('sale')
       .leftJoin('sale.lead', 'lead')
-      .select(`COALESCE(sale.noSaleReason, 'Nao informado')`, 'label')
+      .select(`
+        CASE COALESCE(sale.noSaleReason, 'NotInformed')
+          WHEN 'Price' THEN 'Preco'
+          WHEN 'CreditDenied' THEN 'Credito negado'
+          WHEN 'ChoseCompetitor' THEN 'Escolheu concorrente'
+          WHEN 'NoContact' THEN 'Sem contato'
+          WHEN 'StockUnavailable' THEN 'Estoque indisponivel'
+          WHEN 'PostponedDecision' THEN 'Decisao adiada'
+          WHEN 'VehicleMismatch' THEN 'Veiculo nao aderente'
+          WHEN 'Other' THEN 'Outro'
+          WHEN 'NotInformed' THEN 'Nao informado'
+          ELSE 'Desconhecido'
+        END
+      `, 'label')
       .addSelect('COUNT(*)::int', 'value')
       .where('sale.shopId = :shopId', { shopId })
       .andWhere('sale.closedAt >= :start', { start })
@@ -794,14 +814,27 @@ export class DashboardService {
     if (sellerId) qb.andWhere('sale.sellerId = :sellerId', { sellerId });
     if (leadOrigin) qb.andWhere('lead.origin = :leadOrigin', { leadOrigin });
 
-    const rows = await qb.groupBy('sale.noSaleReason').orderBy('value', 'DESC').limit(8).getRawMany<{ label: string; value: string }>();
+    const rows = await qb.groupBy(`
+        CASE COALESCE(sale.noSaleReason, 'NotInformed')
+          WHEN 'Price' THEN 'Preco'
+          WHEN 'CreditDenied' THEN 'Credito negado'
+          WHEN 'ChoseCompetitor' THEN 'Escolheu concorrente'
+          WHEN 'NoContact' THEN 'Sem contato'
+          WHEN 'StockUnavailable' THEN 'Estoque indisponivel'
+          WHEN 'PostponedDecision' THEN 'Decisao adiada'
+          WHEN 'VehicleMismatch' THEN 'Veiculo nao aderente'
+          WHEN 'Other' THEN 'Outro'
+          WHEN 'NotInformed' THEN 'Nao informado'
+          ELSE 'Desconhecido'
+        END
+      `).orderBy('value', 'DESC').limit(8).getRawMany<{ label: string; value: string }>();
     return rows.map((row) => ({ label: row.label, value: Number(row.value) }));
   }
 
   private async aggregatePaymentMethods(shopId: string, start: Date, sellerId?: string, leadOrigin?: string) {
     const qb = this.saleClosuresRepository.createQueryBuilder('sale')
       .leftJoin('sale.lead', 'lead')
-      .select(`COALESCE(sale.paymentMethod, 'Nao informado')`, 'label')
+      .select(`COALESCE(sale.paymentMethod::text, 'Nao informado')`, 'label')
       .addSelect('COUNT(*)::int', 'value')
       .where('sale.shopId = :shopId', { shopId })
       .andWhere('sale.closedAt >= :start', { start })

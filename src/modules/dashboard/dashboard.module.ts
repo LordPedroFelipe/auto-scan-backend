@@ -9,6 +9,7 @@ import { SaleClosureEntity } from '../sales/entities/sale-closure.entity';
 import { TestDriveEntity } from '../test-drives/entities/test-drive.entity';
 import { UserEntity } from '../users/entities/user.entity';
 import { VehicleEntity } from '../vehicles/entities/vehicle.entity';
+import { SalesGoalsModule } from '../sales-goals/sales-goals.module';
 import { DashboardController } from './dashboard.controller';
 import { DashboardService } from './dashboard.service';
 
@@ -25,6 +26,7 @@ import { DashboardService } from './dashboard.service';
       ChatSessionEntity,
       ChatTelemetryEventEntity,
     ]),
+    SalesGoalsModule,
   ],
   controllers: [DashboardController],
   providers: [DashboardService],

@@ -40,6 +40,7 @@ export enum NoSaleReason {
   PostponedDecision = 'PostponedDecision',
   VehicleMismatch = 'VehicleMismatch',
   Other = 'Other',
+  NotInformed = 'NotInformed',
 }
 
 export enum PaymentMethod {

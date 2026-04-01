@@ -60,7 +60,7 @@ export class SalesService {
         [SaleGiftType.Documentation]: 'Documentacao',
         [SaleGiftType.Warranty]: 'Garantia',
         [SaleGiftType.AccessoryKit]: 'Kit de acessorios',
-        [SaleGiftType.ProtectionFilm]: 'Película / protecao',
+        [SaleGiftType.ProtectionFilm]: 'Pelï¿½cula / protecao',
         [SaleGiftType.InsuranceBonus]: 'Bonus no seguro',
         [SaleGiftType.ServicePackage]: 'Pacote de servicos',
         [SaleGiftType.Other]: 'Outro',
@@ -74,6 +74,7 @@ export class SalesService {
         [NoSaleReason.PostponedDecision]: 'Decisao adiada',
         [NoSaleReason.VehicleMismatch]: 'Veiculo nao aderente',
         [NoSaleReason.Other]: 'Outro',
+        [NoSaleReason.NotInformed]: 'Nao informado',
       }),
     };
   }
@@ -146,7 +147,7 @@ export class SalesService {
       },
     });
 
-    if (!sale) throw new NotFoundException('Fechamento não encontrado.');
+    if (!sale) throw new NotFoundException('Fechamento nï¿½o encontrado.');
     return this.toResponse(sale);
   }
 
@@ -173,7 +174,7 @@ export class SalesService {
 
   async update(id: string, dto: UpdateSaleClosureDto) {
     const existing = await this.salesRepository.findOne({ where: { id } });
-    if (!existing) throw new NotFoundException('Fechamento não encontrado.');
+    if (!existing) throw new NotFoundException('Fechamento nï¿½o encontrado.');
 
     const lead = await this.resolveLead(dto.leadId ?? existing.leadId);
     if (lead.id !== existing.leadId) {
@@ -206,7 +207,7 @@ export class SalesService {
 
   async remove(id: string) {
     const sale = await this.salesRepository.findOne({ where: { id } });
-    if (!sale) throw new NotFoundException('Fechamento não encontrado.');
+    if (!sale) throw new NotFoundException('Fechamento nï¿½o encontrado.');
 
     await this.salesRepository.remove(sale);
     return { success: true };
@@ -214,14 +215,14 @@ export class SalesService {
 
   private async resolveLead(leadId: string) {
     const lead = await this.leadsRepository.findOne({ where: { id: leadId } });
-    if (!lead) throw new BadRequestException('Lead não encontrado.');
+    if (!lead) throw new BadRequestException('Lead nï¿½o encontrado.');
     return lead;
   }
 
   private async ensureNoExistingClosure(leadId: string, ignoreId?: string) {
     const existing = await this.salesRepository.findOne({ where: { leadId } });
     if (existing && existing.id !== ignoreId) {
-      throw new BadRequestException('Este lead já possui um fechamento registrado.');
+      throw new BadRequestException('Este lead jï¿½ possui um fechamento registrado.');
     }
   }
 
@@ -239,33 +240,33 @@ export class SalesService {
     const sellerId = dto.sellerId ?? lead.sellerId ?? null;
 
     const shop = shopId ? await this.shopsRepository.findOne({ where: { id: shopId } }) : null;
-    if (shopId && !shop) throw new BadRequestException('Loja não encontrada.');
+    if (shopId && !shop) throw new BadRequestException('Loja nï¿½o encontrada.');
 
     const vehicle = vehicleId ? await this.vehiclesRepository.findOne({ where: { id: vehicleId } }) : null;
-    if (vehicleId && !vehicle) throw new BadRequestException('Veículo não encontrado.');
+    if (vehicleId && !vehicle) throw new BadRequestException('Veï¿½culo nï¿½o encontrado.');
 
     const seller = sellerId ? await this.usersRepository.findOne({ where: { id: sellerId } }) : null;
-    if (sellerId && !seller) throw new BadRequestException('Vendedor não encontrado.');
+    if (sellerId && !seller) throw new BadRequestException('Vendedor nï¿½o encontrado.');
 
     const testDrive = dto.testDriveId
       ? await this.testDrivesRepository.findOne({ where: { id: dto.testDriveId } })
       : null;
-    if (dto.testDriveId && !testDrive) throw new BadRequestException('Test drive não encontrado.');
+    if (dto.testDriveId && !testDrive) throw new BadRequestException('Test drive nï¿½o encontrado.');
 
     if (vehicle && shopId && vehicle.shopId !== shopId) {
-      throw new BadRequestException('O veículo selecionado não pertence à loja informada.');
+      throw new BadRequestException('O veï¿½culo selecionado nï¿½o pertence ï¿½ loja informada.');
     }
     if (seller && shopId && seller.shopId && seller.shopId !== shopId) {
-      throw new BadRequestException('O vendedor selecionado não pertence à loja informada.');
+      throw new BadRequestException('O vendedor selecionado nï¿½o pertence ï¿½ loja informada.');
     }
     if (lead.shopId && shopId && lead.shopId !== shopId) {
-      throw new BadRequestException('O lead informado não pertence à loja selecionada.');
+      throw new BadRequestException('O lead informado nï¿½o pertence ï¿½ loja selecionada.');
     }
     if (lead.vehicleId && vehicleId && lead.vehicleId !== vehicleId) {
-      throw new BadRequestException('O veículo informado diverge do veículo vinculado ao lead.');
+      throw new BadRequestException('O veï¿½culo informado diverge do veï¿½culo vinculado ao lead.');
     }
     if (testDrive && testDrive.leadId && testDrive.leadId !== lead.id) {
-      throw new BadRequestException('O test drive informado não pertence ao lead selecionado.');
+      throw new BadRequestException('O test drive informado nï¿½o pertence ao lead selecionado.');
     }
 
     return { lead, shop, vehicle, seller, testDrive };
@@ -273,7 +274,7 @@ export class SalesService {
 
   private normalizePayload(dto: Partial<CreateSaleClosureDto>, lead: LeadEntity, vehicle: VehicleEntity | null) {
     const closedAt = dto.closedAt ? new Date(dto.closedAt) : new Date();
-    if (Number.isNaN(closedAt.getTime())) throw new BadRequestException('Data de fechamento inválida.');
+    if (Number.isNaN(closedAt.getTime())) throw new BadRequestException('Data de fechamento invï¿½lida.');
 
     const listPrice = this.toNumber(dto.listPrice ?? vehicle?.price ?? null);
     let salePrice = this.toNumber(dto.salePrice ?? listPrice);

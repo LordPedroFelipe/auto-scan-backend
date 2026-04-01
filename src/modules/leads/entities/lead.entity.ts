@@ -63,6 +63,21 @@ export class LeadEntity {
   @Column({ type: 'varchar', nullable: true, length: 120 })
   origin!: string | null;
 
+  @Column({ type: 'varchar', nullable: true, length: 120 })
+  originSource!: string | null;
+
+  @Column({ type: 'varchar', nullable: true, length: 120 })
+  originMedium!: string | null;
+
+  @Column({ type: 'varchar', nullable: true, length: 120 })
+  originCampaign!: string | null;
+
+  @Column({ type: 'varchar', nullable: true, length: 500 })
+  originReferrer!: string | null;
+
+  @Column({ type: 'jsonb', nullable: true })
+  originUtmParams!: Record<string, any> | null;
+
   @Column({
     type: 'enum',
     enum: LeadStatus,

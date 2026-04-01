@@ -154,6 +154,11 @@ export class VehiclesService {
         isFirstOwner: query.isFirstOwner,
       });
     }
+    if (query.isConsigned !== undefined) {
+      qb.andWhere('vehicle.isConsigned = :isConsigned', {
+        isConsigned: query.isConsigned,
+      });
+    }
     if (query.isSold !== undefined) {
       qb.andWhere('vehicle.isSold = :isSold', { isSold: query.isSold });
     }
@@ -281,6 +286,7 @@ export class VehiclesService {
       hasAuction: dto.hasAuction ?? false,
       hasAccident: dto.hasAccident ?? false,
       isFirstOwner: dto.isFirstOwner ?? false,
+      isConsigned: dto.isConsigned ?? false,
       isOnOffer: dto.isOnOffer ?? false,
       isHighlighted: dto.isHighlighted ?? false,
       isSold: dto.isSold ?? false,
