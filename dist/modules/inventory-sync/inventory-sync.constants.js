@@ -1,0 +1,13 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.DEFAULT_INVENTORY_SYNC_CRON = exports.DEFAULT_INVENTORY_SOURCE_NAME = exports.KAFKA_MULTIMARCAS_IMAGE_BUCKET_BASE_URL = exports.KAFKA_MULTIMARCAS_DEFAULT_CRON = exports.KAFKA_MULTIMARCAS_SOURCE_NAME = exports.KAFKA_MULTIMARCAS_SOURCE_CODE = exports.KAFKA_MULTIMARCAS_FEED_URL = exports.KAFKA_MULTIMARCAS_SELLER_USER_ID = exports.KAFKA_MULTIMARCAS_MASTER_USER_ID = exports.KAFKA_MULTIMARCAS_SHOP_ID = void 0;
+exports.KAFKA_MULTIMARCAS_SHOP_ID = 'b8c7f39e-6d23-4a42-89c6-44c9d44d1750';
+exports.KAFKA_MULTIMARCAS_MASTER_USER_ID = 'd4ab5f6b-cb59-4d9f-91f4-4ae9b01c1001';
+exports.KAFKA_MULTIMARCAS_SELLER_USER_ID = 'd4ab5f6b-cb59-4d9f-91f4-4ae9b01c1002';
+exports.KAFKA_MULTIMARCAS_FEED_URL = 'https://kafkamultimarcas.com.br/dados/estoque.json';
+exports.KAFKA_MULTIMARCAS_SOURCE_CODE = '1750';
+exports.KAFKA_MULTIMARCAS_SOURCE_NAME = 'kafka-litoralcar-json';
+exports.KAFKA_MULTIMARCAS_DEFAULT_CRON = '0 0 * * *';
+exports.KAFKA_MULTIMARCAS_IMAGE_BUCKET_BASE_URL = 'https://302017-litoralcar-org.s3.unifique.cloud/litoralcar';
+exports.DEFAULT_INVENTORY_SOURCE_NAME = 'custom-feed-json';
+exports.DEFAULT_INVENTORY_SYNC_CRON = '0 */6 * * *';
